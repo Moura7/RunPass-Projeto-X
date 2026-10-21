@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.aws/
+.venv/
+venv/
+__pycache__/
+*.pyc
+node_modules/
+.dart_tool/
+build/
+*.pem
+*.key
+.DS_Store
+Thumbs.db
