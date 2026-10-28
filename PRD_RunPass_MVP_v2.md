@@ -44,7 +44,7 @@ O usuário deverá conseguir criar conta e perfil, encontrar uma edição, decla
 
 Persona de referência do PRD inicial: corredor recreativo de 25 a 45 anos, com 4 a 12 provas por ano, principalmente de 5 km, 10 km e 21 km, que valoriza conquistas e pesquisa eventos. Essas características orientam recrutamento e descoberta; não são restrições de elegibilidade.
 
-O beta será gratuito, fechado a convidados e destinado a maiores de 18 anos, com 1.000 corredores. A forma de verificar a elegibilidade será especificada antes da abertura.
+O beta será gratuito e destinado a maiores de 18 anos, com instalação pelas lojas oficiais e admissão dos primeiros 1.000 usuários elegíveis. Após atingir o teto, oferecer lista de espera dentro do aplicativo, sem acesso automático ao beta. Essa revisão substitui o acesso por convite. A forma de verificar a elegibilidade será especificada antes da abertura.
 
 ## 4. Conceitos e regras centrais
 
@@ -116,7 +116,7 @@ Requisitos herdados do PRD inicial: cadastro por e-mail e senha, validação e c
 
 O catálogo mantém nome, organizador, identificação da edição, data, cidade/estado, distâncias, imagem, descrição, links oficial e de inscrição e status. Disponibilidade e obrigatoriedade dos campos administrativos serão detalhadas, especialmente para provas antigas.
 
-Filtros iniciais: nome, cidade, data e distância. Filtros por preço, avaliação, percurso e organizador são evoluções.
+Filtros iniciais: nome, cidade, data e distância. Na revisão técnica, o usuário aprovou busca pelo início do título, combinada com cidade, período e distância, com a restrição informada na interface. Busca aproximada e por qualquer trecho ficam para evolução, assim como filtros por preço, avaliação, percurso e organizador.
 
 A página apresenta dados da edição, distâncias, RunScore geral, quantidade de avaliações, avaliações recentes e quantidade de participantes RunPass. Permite filtrar as avaliações por distância.
 
@@ -158,7 +158,7 @@ Para concluir uma participação, preencher todos os critérios com notas de 1 a
 7. Segurança.
 8. Custo-benefício.
 
-Caixa de texto de comentário opcional. Não há opção “não se aplica” aprovada; qualquer exceção deverá ser tratada explicitamente antes da implementação.
+Caixa de texto de comentário opcional. Na substituição completa da avaliação por PUT, omitir o comentário remove o texto anterior da avaliação atual. O usuário condicionou essa regra à preservação do histórico de eventos de alteração em camada informacional no data lake. Retenção, conteúdo histórico, acesso e tratamento de exclusões ainda serão definidos; não expor versões antigas pela API pública. Não há opção “não se aplica” aprovada; qualquer exceção deverá ser tratada explicitamente antes da implementação.
 
 - Uma avaliação por participação, editável após publicação.
 - Avaliações vinculadas à edição, sem mistura de anos ou ocorrências distintas.
@@ -171,6 +171,9 @@ Caixa de texto de comentário opcional. Não há opção “não se aplica” ap
 - Edição substitui as notas anteriores; exclusão e mudanças de edição exigem recálculo consistente. Remoções por moderação devem ser tratadas no cálculo conforme a política de conteúdo.
 
 ## 10. Medalheiro
+
+- Administrador pode substituir a imagem oficial da medalha no catálogo da edição/distância, sem modificar fotos próprias carregadas pelos corredores. Manter origens distintas. Atualização automática ou preservação da versão nas medalhas já vinculadas à imagem oficial ainda será definida.
+- Definição posterior aprovada: medalhas existentes preservam a versão da imagem oficial vinculada no cadastro. Novos registros usam a referência vigente. Correções retroativas exigem ação administrativa explícita e auditada; troca no catálogo não atualiza automaticamente medalhas antigas.
 
 - Medalha adicionada automaticamente ao concluir o registro da participação.
 - Utilizar a imagem do catálogo quando disponível.
@@ -186,6 +189,8 @@ Salvar e remover edições futuras por “Quero correr”, exibindo prova, cidad
 
 ## 12. Feed, seguidores e interações
 
+- Comentários sociais podem ser editados pelo próprio autor, exibindo indicação de “editado” e preservando a data original de publicação. Edição não remove bloqueios/moderação nem restaura conteúdo oculto automaticamente. Não estender o histórico de avaliações no data lake a comentários sociais sem definição explícita.
+
 - Feed no MVP, voltado à conclusão de corridas e imagens de medalhas.
 - Publicação visível por padrão, com opção de ocultar durante o registro ou após a publicação. Ocultar o post não exclui a participação. Não gerar posts independentes de medalha ou marcos automaticamente.
 - O usuário poderá visualizar publicações de outros usuários, sem depender de seguir alguém ou ter edições em comum. O feed inicial pode apresentar conquistas recentes de corridas de São Paulo capital.
@@ -198,6 +203,8 @@ Salvar e remover edições futuras por “Quero correr”, exibindo prova, cidad
 - Publicações livres de fotos, stories, vídeos, reels, mensagens privadas e grupos ficam fora do escopo.
 
 ## 13. Visibilidade e compartilhamento
+
+- Cards serão gerados no próprio aplicativo, com marca RunPass e respeito às opções atuais de ocultação. Não haverá serviço adicional de geração/armazenamento de cards no backend no MVP. Compartilhamento nativo conforme suporte do dispositivo; cópias já exportadas não podem ser revogadas retroativamente.
 
 - Usuário pode ocultar tempo e colocação por participação.
 - Ocultar tempo oculta também o pace, pois ele e a distância permitem inferir o tempo.
@@ -216,6 +223,12 @@ Informar aprovação/recusa e vinculação de solicitações, novos seguidores, 
 
 ### Moderação
 
+- Encerrar denúncias com decisão e motivo obrigatórios, mantendo o registro restrito à operação: procedente, improcedente ou sem elementos suficientes. A decisão não publica a identidade do denunciante e não substitui a execução explícita de eventual ação de moderação.
+
+- Bloquear outro corredor remove as relações de seguir nos dois sentidos. Curtidas e comentários anteriores são preservados e ocultos entre os envolvidos. Desbloquear não recria esses vínculos de seguir; cada pessoa pode decidir seguir novamente, desde que não haja outro bloqueio ou restrição vigente.
+
+- Ao desbloquear outro corredor, interações anteriores preservadas poderão voltar a ser exibidas se ainda autorizadas. Não recriar relações de seguir removidas nem restaurar conteúdo excluído, oculto ou moderado. Bloqueios ainda existentes na direção oposta continuam restringindo o acesso.
+
 - Denunciar usuários, avaliações, comentários e conteúdo impróprio.
 - Equipe RunPass analisa denúncias com revisão humana.
 - Remover conteúdo ou suspender contas, registrando o motivo da ação.
@@ -228,11 +241,23 @@ Informar aprovação/recusa e vinculação de solicitações, novos seguidores, 
 
 ## 15. Operação administrativa
 
+Organizadores serão apenas cadastros de referência gerenciados pela equipe RunPass, sem conta de acesso ou portal próprio no MVP. Edições podem ser vinculadas a esses cadastros; preservar referências ao corrigir informações. Não introduzir login de organizador, painel B2B ou permissões adicionais a partir desse cadastro.
+
+Histórico informacional das avaliações: preservar versões anteriores e novas das notas e do comentário necessárias à auditoria em data lake, com acesso restrito e política explícita de retenção/exclusão. Não expor versões antigas nas interfaces públicas. Prazo e papéis autorizados ainda a definir; não presumir retenção indefinida.
+
+Prazo aprovado para esse histórico no beta: 60 dias, com revisão antes do encerramento da fase. Essa retenção não substitui a política de exclusão de dados pessoais, não altera os registros ativos e é distinta dos 7 dias de pontos de recuperação. Papéis autorizados e detalhes de descarte ainda a definir.
+
+Consulta do histórico restrita a Administradores especificamente autorizados da equipe RunPass, sem acesso para corredores ou Moderadores por padrão. Exigir MFA e auditar consultas; operações técnicas de gravação/descarte devem ter permissões próprias.
+
+Histórico armazenado em S3 privado e isolado por DEV/PROD, com entrega assíncrona. Preservar evento durável junto à alteração operacional para reenvio após falhas; não perder o histórico por indisponibilidade temporária do lake.
+
+Os 60 dias de retenção do histórico contam desde a ocorrência original de cada evento; reenvios e reprocessamentos não renovam o prazo.
+
 Manter as capacidades administrativas do PRD inicial: cadastrar, editar e remover provas, manter organizadores, imagens e medalhas, consultar avaliações e moderar conteúdo. Acrescentar fila de solicitações, identificação de duplicidades, vinculação de rascunhos e avisos dos resultados da revisão.
 
 O MVP incluirá um painel administrativo interno mínimo, restrito à equipe RunPass, para executar essas operações. Esse painel não constitui um site para corredores; o site público continua fora do MVP.
 
-Edições com participações deverão ser arquivadas para novas ações, preservando o histórico e as referências existentes, em vez de excluídas em cascata. O detalhamento das ações bloqueadas pelo arquivamento será feito na especificação, sem apagar participações, avaliações ou medalhas existentes.
+Edições com participações deverão ser arquivadas em vez de excluídas em cascata. O arquivamento impede novos registros de participação, conclusão de rascunhos e transferência de participação para a edição arquivada, mantendo consulta ao histórico e edição ou exclusão dos registros existentes. Ao bloquear, preservar os dados do rascunho ou da participação de origem e informar o motivo. Preservar referências, avaliações e medalhas enquanto seus registros não forem excluídos pelo fluxo aplicável. Não arquivar automaticamente uma edição apenas por ser passada.
 
 ## 16. Requisitos não funcionais e privacidade
 
@@ -271,7 +296,9 @@ Métricas secundárias: aquisição, ativação, abandono da avaliação, regist
 
 ## 19. Beta e critérios de sucesso
 
-- Beta gratuito para convidados maiores de 18 anos. Meta de recrutamento e limite máximo: 1.000 usuários durante todo o período. Impedir novas admissões ao atingir o limite; exclusões não liberam novas vagas automaticamente.
+- Elegibilidade etária confirmada na revisão técnica: 18 anos completos ou mais durante o beta, por autodeclaração com preenchimento da data de nascimento. Validar idade no cadastro e manter a data privada, sem exposição no perfil público. Não foi definida exigência de documento. A idade mínima poderá ser redefinida em evolução futura, mediante revisão explícita.
+
+- Beta gratuito para os primeiros usuários elegíveis maiores de 18 anos que se cadastrarem pelo aplicativo instalado nas lojas oficiais, sem convite. Meta de recrutamento e limite máximo: 1.000 usuários durante todo o período. Ao atingir o teto, oferecer lista de espera dentro do app; seus integrantes não contam como admitidos nem recebem acesso automático. Exclusões não liberam novas vagas automaticamente.
 - Avaliação por 60 dias a partir da entrada dos primeiros 50 usuários; registrar esse marco como início da janela. A data final não será adiada até completar 1.000.
 - O foco do beta será medir adesão ao aplicativo, interações, disponibilidade durante o uso e feedbacks dos usuários.
 - Registrar data de entrada e tempo de exposição de cada participante, separando recrutamento de uso. O denominador da ativação será o total de usuários únicos efetivamente admitidos no beta até o encerramento dos 60 dias, incluindo os primeiros 50 que iniciam a janela, e não a meta fixa de 1.000. Convites sem adesão não contam como usuários admitidos. Apresentar recrutamento separadamente.
@@ -297,7 +324,7 @@ O cumprimento das metas apoia a avaliação humana do valor do MVP; não represe
 
 ### P0 — MVP
 
-- Conta, autenticação e acesso por convite para maiores de 18 anos.
+- Conta, autenticação, admissão dos primeiros 1.000 usuários elegíveis maiores de 18 anos e lista de espera no aplicativo após atingir o teto.
 - Perfil público, busca de corredores e seguir perfis.
 - Catálogo, busca, detalhes por edição e wishlist.
 - Solicitação de prova, revisão humana, rascunhos e comunicação do resultado.
@@ -347,7 +374,7 @@ Sem nova rodada automática de entrevistas: o limite de 20 perguntas foi conclu�
 - Ordenação do feed, limites de conteúdo e critérios de busca.
 - Detalhar os fluxos de unicidade, moderação e exclusão conforme as regras aprovadas, sem alterar seus efeitos.
 - Prazos de revisão, políticas de retenção e detalhamento da ocultação das interações antigas após bloqueio, sem excluí-las.
-- Método de elegibilidade etária, distribuição por convite e configuração dos links nas duas plataformas.
+- Método de elegibilidade etária, publicação nas lojas oficiais, detalhes da lista de espera e configuração dos links nas duas plataformas.
 - Validação das metas técnicas, arquitetura e critérios de medição.
 
 ## 23. Principais mudanças da versão 1
@@ -360,7 +387,7 @@ Sem nova rodada automática de entrevistas: o limite de 20 perguntas foi conclu�
 - Revisão de provas cadastradas por usuários, rascunhos, reenvio e tratamento de duplicidade.
 - Perfis públicos com controles de resultado por participação e bloqueio de corredores.
 - Cobertura do catálogo orientada pelas provas dos convidados, substituindo o mínimo de 500.
-- Beta gratuito para 1.000 convidados adultos, durante 60 dias, com metas de ativação, repetição e interação social.
+- Beta gratuito com admissão dos primeiros 1.000 usuários elegíveis adultos pelas lojas oficiais e lista de espera no aplicativo, durante 60 dias, com metas de ativação, repetição e interação social.
 
 ## 24. Visão de longo prazo
 

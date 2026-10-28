@@ -1,0 +1,30 @@
+﻿[
+    {
+        "file":  "SPEC_RunPass_MVP_v1.md",
+        "sha256":  "0ff14c624f6d7d2d7874a7599bd7ed94eb7bd45b82851242a0fdb9e741657fc9"
+    },
+    {
+        "file":  "API-RunPass-v1.openapi.json",
+        "sha256":  "1c641cbdcaf3685206a448fe6d4ae332f373400c4cc62cb4c2644bbe06fcaa27"
+    },
+    {
+        "file":  "MODELO-DYNAMODB-RunPass-v1.md",
+        "sha256":  "2eb3a2ff5b8f0c5d2889418616dcec4375e560fca607841959b85e15b5b15cfc"
+    },
+    {
+        "file":  "MATRIZ-APROVACOES-M4-RunPass.md",
+        "sha256":  "4195777d305acf1c90aca18878ddc6a2b16e61471180d5d6eaca748d65ecdf79"
+    },
+    {
+        "file":  "EVENTOS-E-REPLAY-RunPass-MVP.md",
+        "sha256":  "3a5d7394103c5cadf225ef4d8f027b9bf6393d55a6c3824a8d27f1b61ff248e7"
+    },
+    {
+        "file":  "RETENCAO-TECNICA-RunPass-MVP.md",
+        "sha256":  "2d171119e0750b42365a10e3c745719c4abe93284527e959e14ad1d4f19362ae"
+    },
+    {
+        "file":  "ORCAMENTO-RunPass-preliminar.md",
+        "sha256":  "7f5da4c7f3f1484c4338ccd03066f6464ad89cb6f1fea79a9eb921d558967345"
+    }
+]

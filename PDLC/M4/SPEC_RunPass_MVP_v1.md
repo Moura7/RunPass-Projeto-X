@@ -1,202 +1,262 @@
-# SPEC — RunPass MVP — v1
+# SPEC — RunPass MVP — referência única
 
-**Estado:** DRAFT técnico para revisão. Produto: PRD v2 aprovado pelo usuário. Esta SPEC não tem aprovação técnica nem autoriza implantação.
+Atualização: 27/10/2026. Estado: **direções prioritárias aprovadas pelo usuário; detalhamento e desenvolvimento incremental autorizados no escopo abaixo**.
 
-## Problem Statement
+Arquivo canônico: **SPEC_RunPass_MVP_v1.md**. Por decisão do usuário, existe uma única SPEC ativa. O conteúdo consolidado foi incorporado neste arquivo; a tentativa de v2 foi incorporada sem manter um segundo arquivo ativo. O registro anterior foi preservado em historico/REGISTRO-TECNICO-ANTERIOR-2026-10-27.md, sem vigência concorrente.
 
-Corredores precisam organizar experiências em provas, medalhas e avaliações e trocar essas informações com outros corredores. O beta validará adesão, repetição do registro, interação, disponibilidade e percepção de valor.
+## Decisão de aprovação e primeira entrega
 
-## Solution
+O usuário aprovou as três direções apresentadas e a manutenção de uma única SPEC:
 
-Aplicativo Android/iPhone com catálogo por edição, conclusão autodeclarada, avaliação obrigatória, medalheiro, wishlist e feed de conquistas. Equipe RunPass opera um painel interno para catálogo e moderação. Sem site público para corredores.
+1. **Dados:** DynamoDB sob demanda, agrupando participação, avaliação e medalha; separar os demais domínios conforme padrões de acesso e necessidades operacionais. Engenharia detalha tabelas, chaves, índices e transações sem exigir aprovação de cada atributo. A aprovação não fixa automaticamente as seis tabelas candidatas da seção 6.
+2. **Eventos:** outbox persistida na mesma transação da alteração, entrega via SQS e consumidores protegidos por versões/idempotência; replay de sete dias e reconstrução de projeções antigas pelo estado atual, conforme política já aprovada.
+3. **Identidade:** Cognito com separação entre corredores e operadores; MFA por aplicativo autenticador para administração, autorização na API e permissões por função.
 
-## User Stories
+Primeira entrega autorizada para detalhamento e desenvolvimento técnico: **autenticação → catálogo → rascunho → imagem → conclusão → avaliação e medalha**. Não autoriza provisionamento pago ou release. Detalhes locais e reversíveis de implementação podem prosseguir; orçamento autorizado é condição antes de criar recursos pagos.
 
-1. Como convidado, quero ingressar no beta, para experimentar o produto dentro do limite aprovado.
-2. Como corredor, quero cadastrar e validar meu e-mail e recuperar minha senha, para acessar minha conta.
-3. Como corredor, quero escolher nome e username, para ser encontrado por conhecidos.
-4. Como corredor, quero incluir foto, cidade e bio opcionalmente, para personalizar meu perfil.
-5. Como corredor, quero buscar edições por nome, cidade, data e distância, para encontrar minhas corridas.
-6. Como corredor, quero consultar dados e avaliações de uma edição, para conhecer a experiência de outros.
-7. Como corredor, quero filtrar reviews por distância, para consultar experiências relevantes.
-8. Como corredor, quero declarar que concluí uma edição, para registrar minha conquista sem comprovante obrigatório.
-9. Como corredor, quero informar resultado opcional, para manter meu histórico esportivo.
-10. Como corredor, quero preencher os oito critérios, para avaliar a experiência.
-11. Como corredor, quero comentar opcionalmente a avaliação, para contextualizar as notas.
-12. Como corredor, quero receber a medalha com imagem oficial, para organizar minha coleção.
-13. Como corredor, quero enviar foto quando faltar imagem da medalha, para concluir o cadastro.
-14. Como corredor, quero salvar rascunho de uma prova ausente, para não perder os dados.
-15. Como corredor, quero solicitar uma edição informando nome, data, cidade e distância, para registrá-la após revisão.
-16. Como corredor, quero consultar a decisão e corrigir uma solicitação recusada, para reenviá-la.
-17. Como corredor, quero revisar a vinculação a uma edição existente, para concluir o registro correto.
-18. Como corredor, quero editar meus dados e notas, para corrigir erros sem duplicar a participação.
-19. Como corredor, quero excluir minha participação, para remover seus vínculos e publicação.
-20. Como corredor, quero ocultar tempo e colocação por participação, para controlar sua exposição.
-21. Como corredor, quero ocultar uma publicação antes ou depois de concluí-la, para controlar o feed.
-22. Como corredor, quero salvar edições futuras e ocultar minha wishlist, para organizar meus interesses.
-23. Como corredor, quero buscar e seguir conhecidos, para priorizar suas conquistas no feed.
-24. Como corredor, quero ver publicações de outras pessoas, para descobrir experiências além dos meus contatos.
-25. Como corredor, quero curtir e comentar conquistas, para interagir com outros participantes.
-26. Como corredor, quero compartilhar cards e links, para divulgar minhas conquistas.
-27. Como corredor, quero receber avisos dentro do aplicativo, para acompanhar revisões e interações.
-28. Como corredor, quero denunciar e bloquear usuários, para controlar interações indesejadas.
-29. Como corredor, quero corrigir uma avaliação invalidada, para submetê-la novamente à revisão.
-30. Como corredor, quero excluir minha conta e solicitar exclusão de dados, para encerrar meu uso.
-31. Como administrador, quero aprovar, recusar e vincular solicitações duplicadas, para manter o catálogo consistente.
-32. Como administrador, quero manter edições, distâncias e imagens de medalhas, para apoiar os registros.
-33. Como administrador, quero arquivar edições com participações, para preservar o histórico.
-34. Como moderador, quero ocultar comentários, invalidar notas e suspender contas com motivo, para executar a política de conteúdo.
-35. Como operador, quero limitar o beta a 1.000 admitidos e acompanhar os 60 dias desde os primeiros 50, para respeitar o experimento.
-36. Como operador, quero medir ativação sobre admitidos reais, repetição e interação sobre ativados, para avaliar as metas.
-37. Como operador, quero medir falhas e disponibilidade, para identificar impedimentos ao uso.
-38. Como participante, quero enviar feedback voluntário, para relatar problemas e sugestões.
-39. Como equipe RunPass, quero consolidar feedbacks semanalmente, para priorizar correções.
+Painel completo, feed, pós-beta e detalhes operacionais devem ser resolvidos antes das respectivas entregas. Segurança, restauração, desempenho e privacidade precisam de evidências antes do beta. Requisitos não implementados não voltam automaticamente à condição de não aprovados. Não criar nova SPEC para mera reorganização.
 
-## Implementation Decisions
+## 1. Problema e resultado esperado
 
-### Estado das escolhas
+Corredores precisam descobrir provas, registrar experiências concluídas, organizar medalhas e compartilhar avaliações e conquistas. O MVP deve validar adesão, repetição e interação com até mil corredores, sem exigir arquitetura de produção futura completa no primeiro lançamento.
 
-| Item | Situação |
+Aplicativo Flutter/Dart para Android e iPhone, backend Python/FastAPI em Lambda, armazenamento operacional DynamoDB e operação inicial na AWS São Paulo. Não há site público para corredores no MVP. A equipe RunPass mantém catálogo e moderação por interface administrativa.
+
+## 2. Estado das decisões e execução incremental
+
+- **A — aprovado:** decisões anteriores e as três direções registradas acima.
+- **P — proposta de detalhamento:** candidato técnico que Engenharia pode refinar no escopo aprovado. Alternativas com impacto real de produto, custo ou privacidade voltam à decisão do usuário.
+- **B — dependência técnica:** resolver antes de implementar ou liberar a parte afetada; não bloqueia indiscriminadamente todo o projeto.
+- **L — condição de liberação:** configuração, teste ou evidência necessária antes de PROD/beta.
+
+As propostas P01–P09 e dependências B01–B06 abaixo foram preservadas para rastreabilidade. Não constituem uma nova rodada obrigatória de nove aprovações. As direções de DynamoDB on-demand, outbox/SQS e Cognito/MFA já estão aprovadas; quantidades físicas, parâmetros novos e escolhas além dessas direções não foram aprovados por inferência. A autorização de desenvolvimento não comprova testes nem libera produção.
+
+## 3. Fontes e precedência
+
+Base: PRD_RunPass_MVP_v2.md, decisões de Grill-me e confirmações posteriores, preservadas no registro histórico, MATRIZ-APROVACOES-M4-RunPass.md e documentos de retenção/eventos. Decisão explícita posterior prevalece sobre uma pendência histórica anterior.
+
+O contrato API-RunPass-v1.openapi.json está em 0.7.0-draft, com 55 caminhos e 71 operações. Sua validação estrutural não comprova implementação. MODELO-DYNAMODB-RunPass-v1.md continua parcial; o desenho candidato desta revisão não o transforma em modelo físico homologado.
+
+Referências complementares: EVENTOS-E-REPLAY-RunPass-MVP.md; DATA-LAKE-AVALIACOES-RunPass-v1.md; RETENCAO-E-EXCLUSAO-RunPass-MVP.md; RETENCAO-DENUNCIAS-E-AUDITORIA-RunPass.md; RETENCAO-TECNICA-RunPass-MVP.md; UPLOAD-ADMINISTRATIVO-MEDALHAS-RunPass.md; FECHAMENTO-TECNICO-RunPass-MVP.md; ORCAMENTO-RunPass-preliminar.md e respectiva simulação.
+
+## 4. Requisitos de produto consolidados — A
+
+### 4.1 Catálogo e solicitações
+
+Catálogo por prova e edição, com distâncias próprias. Cobertura inicial das principais corridas de São Paulo capital, dois anos de histórico e provas futuras. Meta de cobertura de 90% usa a referência inicial documentada de provas, não mínimo arbitrário de edições.
+
+Equipe RunPass gerencia catálogo; corredor solicita provas ausentes, com nome, data, cidade e distância. Duplicatas são vinculadas à edição existente após revisão humana. Rascunhos são preservados; solicitação aceita não conclui automaticamente a participação. Organizador é referência de catálogo, sem login ou portal B2B.
+
+Arquivar edição impede novas conclusões e transferências para ela, preserva histórico e permite editar/excluir participações já concluídas. Alterações em distâncias não podem invalidar referências existentes silenciosamente.
+
+### 4.2 Participação, avaliação e medalha
+
+Uma participação por usuário/edição, somente de prova concluída por autodeclaração. Antes de concluir, pode manter rascunho. Conclusão exige oito notas de 1 a 5 e imagem de medalha disponível; comentário de avaliação é opcional.
+
+Critérios: organização, percurso, kit, medalha, hidratação, estrutura, segurança e custo-benefício. RunScore é a média com pesos iguais, por edição, apresentado com uma casa decimal; avaliações podem ser filtradas por distância. Avaliação invalidada não contribui ao score; decisão de moderação não exclui automaticamente toda a conquista.
+
+O proprietário pode editar ou excluir seu cadastro, respeitando unicidade e controle de versão. PUT da avaliação substitui as oito notas; omitir comentário remove o comentário atual e gera histórico restrito antes/depois. Alterar edição exige verificar duplicidade e ajustar contribuições/projeções.
+
+Medalha é adicionada automaticamente na conclusão. Usa imagem oficial vigente ou foto própria obrigatória quando ela não existe. Foto própria não é promovida automaticamente ao catálogo. Cada medalha guarda a versão oficial vinculada; trocar a imagem do catálogo só afeta novos vínculos. Correção retroativa é ação separada, explícita e auditada.
+
+### 4.3 Social e privacidade
+
+Feed de conquistas e medalhas; sem feed genérico de fotos livres. Publicações de outros usuários são visíveis conforme autorização; usuários seguidos têm prioridade de ordenação, com recência dentro dos grupos. Curtidas, comentários, seguir, busca de perfis e wishlist integram o MVP.
+
+Perfil público mostra dados de corrida/conquistas; e-mail e nascimento permanecem privados. Publicações e wishlist começam visíveis, podendo ser ocultadas. Tempo e colocação podem ser ocultados; ocultar tempo também oculta pace em todas as superfícies. API não devolve campos ocultos apenas porque o cliente os esconde.
+
+Bloqueio oculta interações existentes e remove follows nos dois sentidos, sem apagar indiscriminadamente o histórico. Novas interações são impedidas enquanto existir bloqueio em qualquer direção. Desbloqueio não recria follows. Visibilidade e exclusões atuais prevalecem sobre índices/projeções atrasados.
+
+### 4.4 Beta e feedback
+
+Instalação nas lojas oficiais, como no produto futuro. Beta no ambiente PROD, até mil admitidos únicos, por 60 dias desde o 50º admitido. Admissão exige e-mail confirmado e idade mínima de 18 anos por autodeclaração/data de nascimento; não exigir documento por inferência. Exclusão não reabre vaga automaticamente. Excedentes podem entrar voluntariamente em lista de espera, sem acesso automático.
+
+Ativo: pelo menos uma participação concluída com cadastro completo. Metas: ativação de 50% dos admitidos reais; repetição em outra edição de 30% dos ativados; interação social de 30% dos ativados. Cadastros de espera não integram denominadores. Contas técnicas não devem contaminar a coorte de corredores.
+
+Feedback voluntário após primeiro registro, canal contínuo, pesquisa aos 30 dias e fechamento aos 60; revisão semanal. Resultados e privacidade devem respeitar correções/exclusões sem duplicar ativação por recriação.
+
+## 5. Arquitetura e fronteiras
+
+### 5.1 Decisões consolidadas — A
+
+Python apenas no backend; Flutter/Dart mobile; FastAPI em Lambda; DynamoDB como direção de armazenamento; CloudFormation; região sa-east-1; DEV e PROD em contas distintas. Backend modular por domínio, sem exigir um microsserviço por módulo.
+
+GitHub Actions com OIDC e papéis temporários separados por conta; pull request, testes e revisão humana antes de main. Promover os mesmos artefatos validados em DEV, com configuração por ambiente e aprovação manual separada de PROD.
+
+### 5.2 Pacote proposto — P01
+
+API Gateway HTTP como entrada; Cognito User Pools para identidade; Lambda para API, processamento e manutenção; DynamoDB on-demand (aprovado); S3 privado para arquivos; Streams como sinal e SQS com consumidores separados por finalidade; CloudWatch para observabilidade. Sem Aurora, OpenSearch, EventBridge geral, NAT ou CDN por padrão nesta linha de base. Adição posterior exige justificativa e atualização de custo.
+
+Separar buckets/prefixos e papéis para originais temporários, imagens tratadas, histórico de avaliações e evidências. Acesso mobile sempre mediado pela autorização da API; não dar acesso direto às tabelas. Downloads por URLs temporárias autorizadas, com risco de validade residual explicitado.
+
+O histórico de avaliações é uma camada informacional limitada, não plataforma analítica geral. Consulta administrativa mediada por índice de avaliação/período e objetos S3, sem introduzir Athena/Glue/Firehose automaticamente.
+
+## 6. Dados: direção aprovada e desenho candidato — P02
+
+A diretriz é agrupar dados relacionados e separar necessidades operacionais diferentes, sem impor single-table para toda a aplicação. Propõem-se seis fronteiras físicas por ambiente, revisáveis antes de CloudFormation. Nomes são ilustrativos, sem recursos criados.
+
+| Tabela candidata | Conteúdo relacionado | Acesso principal e motivo |
+| --- | --- | --- |
+| IdentityAccess | Estado da conta, perfil, reserva de username, papéis, admissão/espera | Autorização atual, unicidade e teto transacional; dados privados segregados por tipo de item e IAM |
+| RaceCatalog | Provas, edições, distâncias, organizadores e solicitações | Consultas de catálogo e revisão pela equipe; retenção independente do histórico do corredor |
+| RunHistory | Participação, avaliação, medalha e rascunho | Agrupamento relacionado aprovado, recuperação conjunta e histórico sem TTL |
+| Social | Publicação, comentário, like, follow/block, wishlist e avisos | Relações e enumeração por proprietário/alvo para privacidade e limpeza |
+| Operations | Outbox, entregas, idempotência, jobs, sessões e referência de exclusão | Ciclos de vida técnicos explícitos; pendências recuperáveis, sem TTL genérico |
+| Projections | Contribuição de avaliação, RunScore e feed materializado | Dados derivados reconstruíveis; controle de geração/versão separado da fonte |
+
+Cada tabela usa PK/SK compostas; dados pessoais não entram em nomes de recursos ou chaves externas. Exemplo RunHistory: PK USER#id; SK EDITION#editionId#PARTICIPATION, REVIEW ou MEDAL. Rascunhos têm ID independente. Lookup por participationId aponta ao dono/edição. Não armazenar bytes de imagem no DynamoDB.
+
+| Acesso | Estratégia candidata | Exigência antes de implementar |
+| --- | --- | --- |
+| Perfil exato e username único | Chave por usuário e reserva condicional de username | Definir normalização e busca por prefixo sem varredura global |
+| Histórico/medalheiro | Partição do usuário e índice por data de conclusão | Paginação e verificação atual de visibilidade |
+| Reviews por edição/distância | GSIs por edição e edição/distância, ordem temporal | Revalidar moderação, medir concentração e tamanho |
+| Catálogo | Itens de índice explícitos por cidade/período e distância; índice de prefixos normalizados de título | Fixar combinações de filtro e medir leituras; não prometer busca arbitrária |
+| Social e limpeza | Arestas por origem e índice inverso por alvo/proprietário | Enumerar referências para exclusão sem scan global |
+| Admissão | Contador/registro de admitido em transação condicional | Concorrência no 50º/1.000º e não reabrir vagas por exclusão |
+| Pendências e expiração | Índice por estado, shard e data; rechecagem na fonte | Leases e consulta paginada; índice atrasado não é fonte de autorização |
+| Feed | Caixa de entrada por leitor com referências mínimas e ordenação em dois grupos | Prova de completude, mudança de follow e custo de fan-out |
+
+Transações podem atravessar tabelas no mesmo ambiente/região, respeitando limites do serviço; isso não dá restauração conjunta automática. Restauração das fontes, controles e imagens exige runbook e reconciliação antes de reabrir tráfego.
+
+**B01:** detalhar PK/SK/GSIs e itens de índice de catálogo/feed, consultas de cada combinação do OpenAPI, e a distribuição de carga. P02 é proposta de fronteiras, não prova de que todos os acessos estão resolvidos. Comparar fan-out do feed com alternativa de consultas limitadas antes de fixar a implementação. O usuário não precisa aprovar cada nome de atributo.
+
+## 7. Integridade, transações e eventos
+
+### 7.1 Invariantes — A
+
+Não duplicar participação por usuário/edição, like por ator/publicação ou admissão. Versão esperada impede sobrescrita silenciosa. Ator vem da identidade autenticada. Conteúdo pendente, oculto, arquivado ou excluído não se torna publicável por uma projeção antiga.
+
+### 7.2 Outbox/SQS aprovados e detalhamento — P03
+
+Conclusão grava participação, review e medalha, conversão do rascunho quando aplicável, idempotência e outbox em transação com condições de unicidade, conta ativa e versão/estado da edição. Edição concorrente de catálogo deve provocar conflito/revalidação, não conclusão com dados inconsistentes.
+
+Outbox durável em Operations na mesma transação da alteração de negócio. Streams apenas acorda publicador; reconciliador consulta pendências duráveis. Publicador encaminha por destino; falha após envio pode duplicar. Não declarar entrega aplicada apenas porque a fila aceitou.
+
+Envelope: eventId, eventType, schemaVersion, aggregateId, aggregateVersion, occurredAt UTC, correlationId, payload mínimo. Payload de auditoria antes/depois fica separado do evento para score/feed. Nunca incluir nascimento, credenciais ou imagem binária.
+
+Cada consumidor registra versão/contribuição com escrita condicional e, quando possível, na mesma transação do efeito. RunScore guarda contribuição válida por review: calcula diferença para somas/contagem anteriores e registra a versão aplicada. Evento antigo não reaplica contribuição; exclusão ou invalidação retira contribuição. Edição do destino corrige ambos os agregados. Reconstrução é isolada por geração e conciliada com mudanças concorrentes antes de promoção.
+
+Replay de concluídos por até sete dias — A; propõe-se contar desde a última confirmação obrigatória, sem renovar por replay. Pendências permanecem recuperáveis, respeitando exclusões e expiração específica. Reconstruções mais antigas usam fontes atuais. Operação interna registra ator, motivo, seleção e resultado.
+
+**B02:** fixar janela efetiva dos controles de deduplicação e exclusões após definir replay/restauração/transporte. Não assumir que TTL de sete dias cobre entregas em curso ou dados restaurados. Não impor retenção pessoal maior para simplificar controles. Após replay vencer, recusar execução histórica e orientar reconstrução; nunca recriar conteúdo excluído.
+
+## 8. Identidade e autorização
+
+### 8.1 Regras — A
+
+Corredor: e-mail/senha; proprietário altera seus dados. Administrador gerencia catálogo/solicitações/acessos; Moderador atua em denúncias/conteúdo. Ambos exigem MFA. Administrador não recebe moderação ou consulta do lake automaticamente. Consulta do lake exige autorização específica e auditoria.
+
+Conta excluída deve perder acesso à API mesmo com token emitido. Bloqueios são bilaterais na autorização de novas interações. Identidade autenticada sem admissão só acessa bootstrap e exclusão previstos no contrato. Operação administrativa não consome vaga de corredor.
+
+### 8.2 Cognito/MFA aprovados e detalhamento — P04
+
+Cognito segregado por ambiente e pools distintos para corredores e operadores; TOTP obrigatório no pool administrativo. Separar clients, audiences e papéis; API verifica issuer/audience/token e fluxo administrativo autenticado, além de papel/estado atual na fonte. Não inferir MFA de um JWT qualquer nem confiar em indicação enviada pelo frontend.
+
+Bootstrap de operador por procedimento restrito de infraestrutura, sem cadastro público. Recuperação de MFA exige verificação e trilha operacional; não oferecer bypass por endpoint público. Propor ao menos dois operadores recuperáveis antes de PROD para evitar dependência de uma pessoa. Matriz de consulta de auditoria e replay usa permissões específicas.
+
+**B03:** detalhar evidência confiável do fluxo MFA, recuperação, revogação e identidade dos responsáveis pelo bootstrap. Validar o plano Cognito escolhido e o custo, sem tratar a hipótese Lite do orçamento como aprovação. Política IAM e segredos não são criados por este documento.
+
+## 9. Imagens e painel
+
+### 9.1 Imagens — A
+
+JPEG/PNG, original até 10 MB; meta de otimização até 1 MB. Servidor valida formato real, tamanho e decodificação, remove GPS e preserva orientação. Validação com meta de cinco segundos pós-upload; pendente não significa válida. Não servir original não tratado a terceiros.
+
+Sessões administrativas vinculam edição/distância e ambiente. Upload não publica. Após prévia, PATCH versionado confirma referência administrativa validada, sem aceitar upload pessoal de terceiro. Versões anteriores referenciadas são preservadas. URL de upload: 15 minutos.
+
+### 9.2 Propostas — P05
+
+Converter HEIC no dispositivo para formato aceito antes do envio, com teste em iPhone real. Se conversão falhar, informar e preservar rascunho; não declarar suporte HEIC servidor. Limitar decodificação a 25 megapixels por imagem como proteção inicial proposta, com UX de redução local; validar fotos típicas antes de fixar. Downloads autorizados por URL de cinco minutos e sem cache público de conteúdo ocultável; validade residual deve constar no teste/experiência, sem promessa de revogação instantânea de URL já emitida.
+
+Painel Flutter Web como proposta técnica, hospedagem estática privada na operação de administração ou pública apenas para o shell sem dados, com backend protegido. Escolher hospedagem após prova de login/MFA, formulários, uploads e acessibilidade; não acrescentar um site público de corredores.
+
+**B04:** fechar hospedagem/painel, tratamento de filtros/limites e operação retroativa da imagem antes das respectivas entregas. Teste de HEIC, metadados, concorrência e preservação de versões é condição L, sem reaprovar formatos já aceitos.
+
+## 10. Retenção e exclusão: referência consolidada
+
+| Categoria | Estado/regra |
 | --- | --- |
-| Python | Confirmado pelo usuário apenas no backend. Não há exigência de Python na interface mobile. |
-| AWS | Direção inicial solicitada; arquitetura detalhada ainda proposta. |
-| Aplicativo | Flutter/Dart aprovado pelo usuário para Android e iPhone. |
-| IDE | VS Code como proposta, sem vincular a arquitetura a uma IDE. Build iOS exige ambiente macOS/Xcode. |
-| Dados | DynamoDB considerado como banco operacional principal por solicitação do usuário; modelagem e dimensionamento ainda sujeitos à revisão técnica. |
-| Arquitetura desenhada | API Gateway, Lambda modular, Cognito, DynamoDB, S3 e processamento assíncrono; proposta de referência, sem aprovação técnica integral. |
+| Histórico ativo | A: sem TTL; exclusão pelos fluxos previstos |
+| Conta excluída | A: bloqueio/ocultação imediatos; remover dados pessoais ativos em até sete dias, inclusive lake |
+| Lake de avaliações | A: 60 dias desde ocorrência original, sem renovação por replay; exclusão de conta prevalece |
+| Recuperação | A: sete dias no beta, independente dos dados ativos; reaplicar exclusões na restauração |
+| Denúncia aberta | A: enquanto necessária, revisão semanal; não deixar sem acompanhamento indefinidamente |
+| Denúncia encerrada/evidência necessária | A: até 60 dias do encerramento |
+| Auditoria administrativa | A: até 90 dias da ação |
+| Logs DEV/PROD | A: sete/30 dias; minimização e exclusão pessoal continuam obrigatórias |
+| Idempotência de comando | A: sete dias desde primeira aceitação durável |
+| Payload entregue | A: sete dias desde última confirmação obrigatória, não define ledger |
+| Temporário abandonado | A: limpar até 24 horas após expiração da sessão, sem apagar trabalho ativo |
+| Validada nunca vinculada | A: sete dias desde validação, limpar até 24 horas depois; checar referências |
 
-**Definições confirmadas:** Python apenas no backend e Flutter/Dart no aplicativo Android/iPhone. As demais escolhas de arquitetura permanecem propostas até revisão específica.
+**P06:** bloquear consulta de lake/denúncia/auditoria no vencimento e remover cópias operacionais elegíveis em até 24 horas depois. Auditoria de avaliação ainda pendente ao vencer deve ter payload pessoal descartado com registro mínimo de expiração/falha, sem falsa confirmação de entrega. Evento operacional de score continua independente.
 
-### Arquitetura proposta, não aprovada
+**B05:** definir controle mínimo de exclusões e retenções restantes de rascunhos, espera, solicitações e feedbacks; política de nascimento; comprovar que logs e filas permitem cumprir exclusão pessoal. Não armazenar dados indefinidamente sob pretexto de pendência, backup ou auditoria. Backups não são prometidos como removidos em 24 horas; versões e cópias são inventariadas.
 
-- Backend Python em monólito modular, evitando microsserviços no MVP.
-- API HTTP com contrato OpenAPI e validação de entrada. Framework Python ainda em revisão; FastAPI é candidato. Django/Fargate foi alternativa anterior, não escolha aprovada. Com DynamoDB, não presumir integração direta com Django ORM/Admin.
-- Arquitetura desenhada mais recente: API Gateway como entrada HTTPS/JWT e backend Python modular em Lambda. Validar latência, concorrência, limites e custos antes da aprovação. Módulos de negócio não implicam microsserviços independentes.
-- Amazon Cognito como proposta de identidade; autorização de proprietário, bloqueios, suspensão e papel administrativo permanece no domínio, além de validar token.
-- DynamoDB como fonte operacional principal nesta proposta, substituindo a referência inicial a PostgreSQL. Não incluir Aurora/PostgreSQL simultaneamente sem justificativa e revisão explícita.
-- S3 privado para imagens; acesso temporário autorizado e sem exposição direta indiscriminada dos objetos. CloudWatch como proposta de logs/métricas, gestão de segredos e permissões mínimas por serviço.
-- Painel interno consumindo as mesmas regras de domínio. Framework e hospedagem dependem da escolha de backend; acesso administrativo segregado e auditado.
-- Sem valor de custo estimado aprovado: região, carga, armazenamento, conexões, alta disponibilidade e orçamento precisam ser definidos antes de provisionar.
+## 11. Contratos e testes
 
-### Armazenamento DynamoDB e padrões de acesso
+### 11.1 Contrato HTTP
 
-- Modelar chaves, índices e projeções a partir das consultas aprovadas, antes da implementação. Número de tabelas, chaves e índices ainda não foi decidido; não presumir single-table obrigatório.
-- Mapear pelo menos: perfil por username; histórico/medalhas por usuário; catálogo por cidade/data/distância/nome; avaliações por edição e distância; feed público e de seguidos; wishlist; avisos; solicitações e denúncias por estado.
-- Consultas críticas não devem depender de varreduras globais como estratégia principal. Busca combinada do catálogo e ordenação do feed precisam de prova técnica, estimativa de leitura/escrita e paginação.
-- Usar identidade determinística e escrita condicional para participação única por usuário/edição, curtidas únicas e reserva de username. Verificar unicidade no armazenamento principal, não por consulta prévia a índice eventualmente consistente.
-- Concluir participação, avaliação, medalha e registro de evento/outbox em transação, respeitando limites do DynamoDB. Imagens continuam no S3; sua validação antecede a conclusão e não faz parte da transação do banco.
-- Índices globais podem ter atraso de atualização. Definir onde leitura fortemente consistente é necessária e revalidar permissões/visibilidade na fonte antes de expor dados sensíveis, mesmo se a projeção do feed estiver atrasada.
-- RunScore exige atualização idempotente de soma/contagem ou projeção reconstruível; tratar edição, exclusão e invalidação sem duplicar contribuições. Escolha entre consistência imediata e atualização assíncrona do agregado permanece em revisão.
-- Avaliar distribuição de chaves, concentração de acesso em provas populares e índices de feed; capacidade automática não elimina hot keys nem modelagem inadequada.
-- Prever exportação/reprocessamento para analytics, recuperação e evolução de projeções, sem usar varreduras de produção para cada relatório.
+OpenAPI 0.7.0-draft cobre conta/beta, perfis, catálogo, participação/review, uploads comuns e administrativos, social, wishlist, notices, solicitações, moderação e administração. PUT de review é substituição; PATCH é alteração parcial; DELETE aceita remoção e não afirma limpeza de todas as cópias. Cognito tem fluxo de login próprio, não endpoints fictícios no backend.
 
-### Eventos, imagens e evolução
+Erros, idempotência, versão, parâmetros e schemas existentes são a base de revisão. **P07:** aprovar a linha de base contratual condicionada a revisão por jornada; ajustes incompatíveis exigem versão/migração. Limites de texto e paginação devem ser fixados no contrato antes de gerar cliente definitivo. Não interpretar extensões x-required-role/x-requires-mfa como segurança executável.
 
-- Fluxo proposto: transação grava evento de domínio na outbox; DynamoDB Streams aciona Lambda publicadora; esta encaminha eventos para SQS; workers Python/Lambda executam efeitos secundários. Filtrar registros de outbox para evitar que toda alteração seja tratada como evento de negócio ou gere ciclos.
-- Retentativas podem duplicar entregas: identificador de evento e consumidores idempotentes são necessários. Configurar fila de erro, alarmes, reprocessamento e tratamento de falhas no publicador e nos workers.
-- Avaliar prazo de retenção dos streams e estratégia de reconciliação da outbox para indisponibilidade prolongada; não depender apenas de retentativa indefinida.
-- Tarefas assíncronas candidatas: processamento/validação de imagens, avisos internos e projeções analíticas. Não tornar assíncrona uma validação necessária para concluir a participação sem definir estado intermediário.
-- Upload autorizado do aplicativo para S3 privado, com confirmação/validação pelo backend e acesso temporário à imagem. URLs previamente emitidas não são revogadas automaticamente por ocultar o post; definir expiração e comportamento de cache coerentes com privacidade.
-- Evolução prevista, fora do MVP: EventBridge para múltiplos consumidores, OpenSearch para busca avançada, analytics separado e integrações externas. São possibilidades, não serviços já aprovados para provisionamento.
-- Serviços podem ser extraídos quando carga, disponibilidade ou organização da equipe justificarem. Manter fronteiras entre módulos e contratos de eventos para reduzir acoplamento; extração futura não será automática.
+### 11.2 Critérios mensuráveis propostos — P08
 
-### Diagrama da proposta
+| Área | Proposta de aceite e evidência L |
+| --- | --- |
+| Integridade | Testes concorrentes sem participação/like/admissão duplicados; sem perda de outbox confirmada |
+| Segurança | Testes negativos de proprietário, papéis, MFA, bloqueios e token anterior à exclusão; dados ocultos ausentes das respostas |
+| Latência | p95 da validação de imagem até 5 s pós-upload; p95 RunScore até 10 s pós-commit, no cenário de carga acordado |
+| API | Separar endpoint crítico de processamento assíncrono; medir média abaixo de 500 ms e p95 abaixo de 1 s para operações leves, sem contar transferência de arquivo |
+| Carga | Patamar de 20 req/s por 30 min, mistura versionada de jornadas; estresse de 100 req/s por 10 min, com limitação controlada e sem corrupção/perda |
+| Falhas | Menos de 1% de erros 5xx no ensaio esperado; respostas de validação deliberadamente inválidas fora dessa conta; identificar toda limitação 429 |
+| Disponibilidade | Meta anterior de 99,5%; propor janela mensal por jornada sintética, contando indisponibilidade percebida inclusive manutenção planejada; RTO não é franquia de queda |
+| Recuperação | Ensaio de RPO até 5 min e RTO até 4 h nos cenários cobertos, com exclusões reaplicadas, dados e imagens coerentes |
+| Mobile | Jornadas essenciais em Android/iPhone reais, formatos de foto, privacidade e instalação pelas lojas; fixar modelos/versões testados |
 
-O diagrama RunPass-Arquitetura-MVP-DynamoDB-v1.png acompanha esta SPEC como referência visual para revisão. É uma imagem ilustrativa; as regras escritas prevalecem.
+P95, duração, mistura e limiares adicionais são propostas novas, não metas históricas aprovadas por inferência. Carga de mil inscritos não significa mil simultâneos. RTO depende de cenário e pode consumir mais que o orçamento mensal de disponibilidade; avaliar ambos separadamente.
 
-Ressalvas de leitura: login ocorre no Cognito, aplicativo e painel chamam API Gateway; DynamoDB alimenta Streams, embora essa seta esteja implícita na imagem. A menção a “inscrições” no cartão de catálogo não autoriza gestão/venda de inscrições. O painel atende apenas à equipe RunPass, não a organizadores. Sem site público nem push.
+## 12. Orçamento, operação e liberação
 
-### Módulos e modelo de dados propostos
+Premissas A: 20 medalhas/usuário, 300 usuários/dia, duas sessões/dia e 30 imagens/sessão. Estimativa existente é sensibilidade parcial baseada nas tarifas coletadas em 26/10/2026; não atualizada por esta consolidação.
 
-Identidade/perfil, catálogo, solicitações, participações, avaliações/RunScore, imagens/medalheiro, social, moderação, avisos, beta/feedback e administração.
+Subtotal registrado: DEV US$ 3,07/mês e PROD esperado US$ 26,91/mês; soma modelada US$ 29,98/mês, antes das exclusões. Não é proposta de teto. Não usar US$ 29,98 como custo completo nem aplicar os valores automaticamente às seis tabelas candidatas ou à nova solução de identidade.
 
-Entidades principais:
+**B06:** recalcular por operações/tamanhos/índices, incluir outbox/ledger, jobs, S3 versões/limpeza, consulta/auditoria, logs completos, alarmes, identidade/painel, pipeline, tráfego API, lojas e demais exclusões; apresentar limite autorizado antes de provisionar. Não há orçamento aprovado.
 
-- Usuário: referência de identidade, nome, username único, campos opcionais, status, admissão no beta e preferências de wishlist.
-- Prova e Edição: identidade própria, data/local, organizador, status e distâncias oferecidas.
-- Imagem de medalha do catálogo: associada à edição e, quando necessário, à distância.
-- Solicitação: solicitante, dados mínimos, status, motivo e edição vinculada.
-- Participação: usuário, edição ou solicitação enquanto rascunho, distância, resultado opcional, status e visibilidade de resultados. Unicidade por usuário/edição.
-- Avaliação: participação única, oito notas inteiras 1–5, comentário opcional e estado de moderação.
-- Medalha: participação única, referência da imagem oficial ou upload do proprietário.
-- Publicação: participação única, estado de visibilidade e datas; curtidas únicas por usuário/publicação e comentários associados.
-- Seguimento, bloqueio, wishlist, denúncia, aviso, feedback, auditoria administrativa e registro do beta.
+Alertas críticos por e-mail à equipe RunPass — A. **L:** nomear principal/substituto e cobertura, testar recebimento/escalonamento, documentar falhas, replay, restore, rollback e exclusão. Endereço operacional fora do repositório. Antes de PROD: acessos, lojas, política de dados, testes essenciais, custo autorizado e aceite de release.
 
-### Operações e invariantes
+## 13. Encerramento do beta — proposta P09
 
-- Contrato HTTP orientado a recursos e comandos de concluir, revisar, arquivar, moderar e ocultar. Identidade vem do token, nunca apenas de identificador enviado pelo cliente.
-- Leituras devem aplicar projeção pública: não devolver resultado oculto e apenas esconder na tela. Mesmo controle em perfil, medalheiro, feed, cards e acesso às imagens.
-- Conclusão verifica edição, unicidade, oito notas e imagem válida; gravar participação, avaliação e medalha em transação. Retentativas não criam cópias: comando idempotente.
-- Upload iniciado com autorização, validado no servidor por tamanho, tipo real e imagem decodificável. Só imagem concluída e pertencente ao usuário pode satisfazer o requisito. Limites exatos e remoção de metadados devem ser especificados antes de implementar uploads.
-- Rascunhos não contribuem para RunScore, medalheiro público nem métricas de conclusão.
-- RunScore usa somente avaliações válidas; calcular com precisão e arredondar na exibição. Sem notas, mostrar ausência de avaliação, não nota zero.
-- Invalidar avaliação mantém histórico e publicação, mas remove notas públicas e do agregado; correção só retorna após revisão humana.
-- Editar a edição atualiza referências e agregados de ambas; conflito de unicidade não sobrescreve cadastro existente. Exclusão da participação remove os vínculos aprovados.
-- Arquivar edição impede novas inclusões como proposta operacional; quais correções continuam permitidas precisa ser validado antes de implementar essa operação.
-- Feed consulta publicações visíveis, exclui conteúdo bloqueado/suspenso e prioriza autores seguidos. Ordem proposta: seguidos primeiro, depois demais, com recência e desempate estável dentro dos grupos; paginação por cursor. Confirmar a regra detalhada na revisão técnica.
-- Bloqueio preserva registros anteriores, ocultando-os entre envolvidos, e impede novas interações. Não prometer proteção sobre cópias exportadas.
-- Avisos e feedback não dependem de push. Emissão de avisos após transações deve tolerar retentativa e evitar duplicação.
-- Links abrem no app ou na loja; validar configuração de domínio e associação das plataformas sem criar site público completo.
-- Solicitação aprovada ou vinculada não conclui participação automaticamente: corredor revisa e conclui.
+Ao fim dos 60 dias, não apagar contas automaticamente nem ampliar vagas. Propor manter acesso dos admitidos e congelar novas admissões até revisão de resultados pela equipe RunPass; preservar lista de espera conforme política de retenção a fechar. Aprovar explicitamente a continuidade operacional e seu orçamento: a duração da avaliação não encerra custos nem obrigações por si só.
 
-### Beta, observabilidade e feedback
+O aplicativo continua distribuído pelas lojas oficiais. Alteração de faixa etária, monetização, site público ou expansão de capacidade exige evolução específica; não faz parte desta proposta.
 
-- Contabilizar admitidos únicos em transação para não ultrapassar 1.000 em admissões concorrentes. Registrar marco de entrada do 50º; fim em 60 dias. Contagem não reinicia por exclusão.
-- Ativação >=50% dos admitidos reais, incluindo os primeiros 50; repetição >=30% dos ativados em outra edição; interação >=30% dos ativados com like/comentário em conquista alheia.
-- Definir em revisão técnica como correções e exclusões afetam o relatório histórico, sem duplicar ativação por recriação. Eventos de comportamento não devem expor resultados ocultos ou texto pessoal desnecessário.
-- Logs estruturados com correlação, latência, erros e operações administrativas; nunca credenciais. Monitorar jornadas, não apenas disponibilidade de infraestrutura.
-- Metas herdadas: inicial <3 s, média API crítica <500 ms, disponibilidade 99,5%; medições exigem perfil de dispositivo/rede, endpoints e janela definidos. Não garantir esses números antes de testar.
-- Feedback voluntário: facilidade após primeiro registro (1–5 e texto opcional), botão problema/sugestão/elogio, pesquisa aos 30 dias, fechamento aos 60 e pergunta após sete dias sem registro. Consolidar semanalmente.
-- Preparar exclusão de conta e dados com política de retenção, tratamento de terceiros, backups e métricas; política ainda não aprovada e não pode ser inventada pela implementação.
+## 14. Plano de execução da primeira entrega
 
-## Testing Decisions
+1. Detalhar apenas os acessos, chaves e transações de identidade, catálogo e histórico necessários ao fluxo inicial; adaptar o modelo DynamoDB existente. Fechar a deduplicação/versão e o controle de exclusões dos consumidores envolvidos. Feed completo não bloqueia essa modelagem inicial.
+2. Atualizar os contratos existentes para esse fluxo, especificar autenticação/autorizações e preparar testes locais de unicidade, versão, imagem, transação/outbox e replay.
+3. Preparar implementation-slices.md para a primeira entrega, com dependências e critérios de aceite. Organizar contexto/regras/harness antes da execução; não marcar uma dependência não resolvida como concluída.
+4. Desenvolver e revisar por entrega. Antes de provisionar DEV, concluir orçamento aplicável e obter autorização de custo. Antes do beta, cumprir condições de liberação, fechar políticas necessárias e revisar resultados de testes.
 
-**Abordagem aprovada pelo usuário:** usar o contrato da API como principal fronteira de testes do domínio, verificando entradas e saídas com persistência real em ambiente de teste isolado. Complementar com testes ponta a ponta das jornadas essenciais Android/iPhone para validar UI, imagens, links e visibilidade. A aprovação dessa abordagem não equivale à aprovação integral da arquitetura ou a testes já executados.
+**Aprovação registrada:** direções prioritárias e desenvolvimento incremental do fluxo inicial. **Pendente:** detalhamento dos pontos técnicos da entrega e aceite posterior dos resultados. Não é necessário reaprovar as mesmas direções; aprovação de todo o MVP e autorização de PROD não são presumidas.
 
-Não foi encontrado aplicativo implementado no diretório inspecionado; não há padrões anteriores de testes identificados. Não inventar cobertura existente.
+## 15. Fora do MVP e pontos de extensão
 
-- Bons testes verificam comportamento observável, autorização e efeitos persistidos, sem depender de nomes internos, chaves físicas específicas ou composição das classes.
-- Cenários: conclusão válida; notas incompletas; ausência de imagem; duplicidade concorrente; rascunho; solicitação recusada/reenvio; correção de edição; exclusão e recálculo; moderação; bloqueio; perfil público sem e-mail; resultado oculto ausente da resposta; feed com prioridade de seguidos; convite e teto concorrente do beta.
-- Testes de imagem comprovam acesso autorizado e ausência de referência utilizável a objeto de outro usuário.
-- Cenários mobile: cadastro, descoberta, rascunho, upload, conclusão, ocultação antes/depois de publicar e retorno de links compartilhados.
-- Testes de contrato de identidade/armazenamento em ambiente AWS separado; não usar recursos de produção.
-- Testes de carga e disponibilidade usam critérios mensuráveis e volume simultâneo aprovado; 1.000 convidados não significa 1.000 usuários simultâneos.
-- Segurança inclui acesso de outro usuário, administrativo indevido, bloqueios, suspensão e downloads privados.
-- Verificar recuperação de banco e limpeza de dados em ambiente de teste antes do beta.
-- Para DynamoDB: validar escritas condicionais e transações concorrentes, atraso de índices, atualização de RunScore, eventos duplicados/fora de ordem, reprocessamento da outbox e ocultação de dados apesar de projeções atrasadas. Testar comportamento real em ambiente AWS isolado, além de testes locais.
+Fora: rastreamento GPS/treinos, chat/stories, ranking competitivo, clubes, monetização, integrações esportivas, portal de organizadores, analytics avançado e site público para corredores. Notificações do produto inicialmente internas; push futuro. Compartilhamento usa cards gerados localmente com dados autorizados.
 
-## Out of Scope
+Evolução por contratos versionados, fronteiras de módulos e projeções reconstruíveis. Separar serviço, banco ou consumidor quando carga, isolamento ou operação justificarem; não prometer escalabilidade sem medir hot keys, fan-out, custo e limites.
 
-Site para corredores, tracking GPS, treino, chat privado, stories, vídeos, feed de fotos livres, clubes/grupos, marcos extras, rankings, monetização, pagamentos, importação de contatos, push e integrações esportivas/IA. Não provisionar AWS, criar contas ou publicar aplicativos durante a redação desta SPEC.
+## 16. Referências técnicas consultadas nesta revisão
 
-## Further Notes
+- [DynamoDB: limites e transações](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html): transações têm limites e não atravessam contas/regiões.
+- [DynamoDB: TTL](https://docs.aws.amazon.com/us_en/amazondynamodb/latest/developerguide/TTL.html): expiração não representa descarte físico imediato; trabalhos com prazo precisam de desenho próprio.
+- [Cognito: TOTP MFA](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-mfa-totp.html): base para a proposta de segundo fator; integração e recuperação precisam de validação.
 
-### Revisão necessária
+Registro de aprovação: usuário respondeu **“Aprovado! vamos utilizar uma única SPEC”**, aprovando as três direções e a primeira entrega descritas no início. Não há aprovação de terceiros presumida. Identificação de responsáveis técnicos, aceite de implementação e liberação de PROD serão registrados separadamente. Esta decisão não cria evidência de reuniões ou gates corporativos não realizados.
 
-1. Planejar ambiente e build mobile com Flutter/Dart aprovado; Python confirmado exclusivamente no backend.
-2. Detalhamento dos cenários de teste; fronteira principal pela API e complemento por jornadas essenciais no aplicativo já aprovados pelo usuário.
-3. Arquitetura, orçamento/região, stack do painel e responsável técnico.
-4. Retenção/exclusão, verificação etária, limites de upload e acesso por convite.
-5. Critérios de medição e políticas operacionais não resolvidas no PRD.
-6. Modelo DynamoDB, índices e consultas de catálogo/feed; consistência do RunScore, capacidade e custo sob carga.
-7. Contratos dos eventos, recuperação de falhas, outbox/Streams/SQS e política de acesso/cache das imagens.
+## Plano da primeira entrega preparado
 
-Este documento sintetiza o contexto sem repetir o grill-me. Propostas técnicas não são decisões aprovadas. O processo corporativo da SKILL-PDLC ainda não tem adaptação formal registrada; não declarar reunião Teams ou unanimidade inexistentes.
-
-### Publicação da skill
-
-Rastreador e vocabulário de triagem não configurados. A to-spec orienta executar `/setup-matt-pocock-skills` nessa situação. Esta é uma versão local revisável, não uma issue publicada nem marcada `ready-for-agent`. Não publicar em serviço externo sem destino identificado e autorização aplicável.
-
-### Referências técnicas consultadas
-
-- Flutter e linguagens: https://docs.flutter.dev/resources/faq
-- Ambiente multiplataforma e iOS: https://docs.flutter.dev/platform-integration
-- JWT/Cognito em HTTP API: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html
-- Modelagem DynamoDB: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-relational-modeling.html
-- Transações DynamoDB: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html
-- Índices e consistência: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/SecondaryIndexes.html
-- Entrega SQS: https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/standard-queues-at-least-once-delivery.html
-
-### Próximas entregas
-
-Revisar as propostas e validar riscos com prova técnica quando necessário; aprovar a especificação e então produzir implementation-slices. Não criar tickets como prontos para execução enquanto escolhas essenciais permanecerem abertas.
+implementation-slices.md detalha S00–S09 para o fluxo aprovado: preparação local/contexto/harness, desenho de dados e contratos, identidade/admissão, catálogo, rascunho, imagem, conclusão/avaliação/medalha, consumidores/RunScore/histórico restrito, edição/exclusão e integração real em DEV. Cada slice tem dependências e critérios de aceite. S00 pode iniciar; os seguintes dependem das saídas anteriores. Provisionamento DEV depende de orçamento e autorização; release PROD/beta não é autorizado por esse plano. Não há implementação/testes de execução concluídos nem nova SPEC criada.

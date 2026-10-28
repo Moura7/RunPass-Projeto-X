@@ -1,0 +1,6852 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "RunPass API — contrato inicial parcial",
+    "version": "0.7.0-draft",
+    "description": "Review contract covering primary mobile and operational MVP journeys. Proposed routes/schemas, not deployed endpoints. x-required-role, x-required-permission, x-requires-mfa and x-requires-beta-admission document backend checks; they do not enforce security automatically. Cognito signup/login/token recovery are provider flows, not implemented by this API. Coverage is not proof of completeness. Contract coverage reviewed against PRD; official medal references and edition versions added. Structural validation is not functional/security certification. Share cards are generated locally in Flutter using authorized current data; no backend card-rendering endpoint is required by the approved MVP."
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/participations/{id}/complete": {
+      "post": {
+        "operationId": "completeParticipation",
+        "description": "Conclui rascunho existente, exigindo oito notas e imagem validada; versão e estado da edição revalidados. Identidade vem do token. Não publica se a visibilidade escolhida for oculta.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteParticipation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Concluída, ou resultado idempotente anterior",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompletedParticipation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/uploads": {
+      "post": {
+        "operationId": "startUpload",
+        "description": "Cria intenção autenticada de upload. URL temporária não dispensa validação posterior do arquivo.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "contentType",
+                  "sizeBytes"
+                ],
+                "properties": {
+                  "contentType": {
+                    "type": "string",
+                    "enum": [
+                      "image/jpeg",
+                      "image/png"
+                    ]
+                  },
+                  "sizeBytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Intenção de upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "uploadId",
+                    "uploadUrl",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "uploadId": {
+                      "type": "string"
+                    },
+                    "uploadUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/uploads/{id}/finalize": {
+      "post": {
+        "operationId": "finalizeUpload",
+        "description": "Confirma transferência e inicia validação do objeto pertencente ao usuário. Meta 5 segundos pós-upload; pendente não significa sucesso. HEIC requer solução compatível ainda em revisão.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Válida ou falha",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadStatus"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Processamento pendente; não autoriza conclusão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/uploads/{id}/status": {
+      "get": {
+        "operationId": "getUploadStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado autorizado do upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/participations/{id}": {
+      "patch": {
+        "operationId": "patchParticipation",
+        "description": "Altera parcialmente dados da corrida de propriedade do usu?rio, sem editar a avalia??o. Revalida vers?o, imagem, unicidade e estado da edi??o. Troca para edi??o arquivada ? bloqueada. N?o exige preencher campos omitidos nem cria nova participa??o. Confirma??o de persist?ncia n?o significa RunScore j? atualizado.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchParticipation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opera??o persistida, ou resposta idempotente anterior",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Participation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      },
+      "get": {
+        "operationId": "getParticipation",
+        "tags": [
+          "Participations"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Owner can read a draft; other authenticated users see only an authorized completed projection. Recheck deletion, account status, blocking and result visibility at read time.",
+        "responses": {
+          "200": {
+            "description": "Authorized participation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Participation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      },
+      "delete": {
+        "operationId": "deleteParticipation",
+        "tags": [
+          "Participations"
+        ],
+        "description": "Owner-only logical deletion with durable cleanup job. On acceptance, hide participation and post and block interactions; physical cleanup and RunScore are asynchronous. Preserve shared catalog images. Same idempotency key returns the original operation. Retention and lake deletion policy remain separate.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "expectedVersion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Hidden; cleanup accepted, not proof of erasure from backups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionOperation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/participations/{id}/review": {
+      "put": {
+        "operationId": "replaceParticipationReview",
+        "description": "Substitui a avalia??o completa de uma participa??o existente; oito notas sempre obrigat?rias. Opera??o somente pelo propriet?rio. Corre??o de avalia??o invalidada fica pending_review at? revis?o humana. N?o cria participa??o nem dispensa avalia??o inicial obrigat?ria. Agregado RunScore atualiza assincronamente. Omitir coment?rio remove o anterior da representa??o atual; preservar evento dur?vel para hist?rico informacional no data lake. Entrega ass?ncrona, pol?tica de dados e recupera??o ainda a detalhar. Hist?rico de auditoria aprovado inclui valores anteriores e novos das notas e do coment?rio, com acesso restrito; reten??o de 60 dias no beta aprovada, com revis?o antes do encerramento. Acesso e pol?tica de exclus?o/descarte ainda a detalhar. Consulta ao hist?rico informacional somente por Administradores autorizados da equipe RunPass, sem acesso para corredores ou Moderadores por padr?o; esta rota n?o retorna vers?es antigas.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceReview"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opera??o persistida, ou resposta idempotente anterior",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Review"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      },
+      "get": {
+        "operationId": "getParticipationReview",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Current authorized review only. Owner may read correction status; public callers do not see invalidated or pending-review content. No lake history is returned.",
+        "responses": {
+          "200": {
+            "description": "Current authorized review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Review"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/participations": {
+      "post": {
+        "operationId": "createParticipationDraft",
+        "tags": [
+          "Participations"
+        ],
+        "description": "Create an owned draft. Does not create a public post, a completed medal or a RunScore contribution. Server checks identity, source and uniqueness. Preserve data if the edition is unavailable for completion.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateParticipation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft created, or same result on replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Participation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/me/participations": {
+      "get": {
+        "operationId": "listMyParticipations",
+        "tags": [
+          "Participations"
+        ],
+        "description": "Owner-only list, including drafts when requested. Never serves another user private drafts.",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "completed"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized page; cursor opaque and tied to filters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/deletion-operations/{id}": {
+      "get": {
+        "operationId": "getDeletionOperation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Owner-only status even when participation is no longer visible. Subject to account deletion access rules.",
+        "responses": {
+          "200": {
+            "description": "Cleanup status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionOperation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/editions": {
+      "get": {
+        "operationId": "listEditions",
+        "description": "List approved catalog editions. namePrefix matches only the start of normalized title; city, date range and distance can combine. Stable pagination; dateFrom <= dateTo. No public pending requests. Normalization and filter index plan remain proposals.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "Catalog"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namePrefix",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "distanceKm",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "exclusiveMinimum": true
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/editions/{id}": {
+      "get": {
+        "operationId": "getEdition",
+        "description": "Read an approved edition. Archived editions preserve history but prohibit new completion or transfer.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Edition"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "Catalog"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/editions/{id}/reviews": {
+      "get": {
+        "operationId": "listEditionReviews",
+        "description": "List currently valid public reviews for this edition, optionally filtered by distanceId. Filtering reviews does not create a separate distance RunScore. Recheck moderation, blocking and account visibility; never return lake versions.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "Catalog"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "distanceId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/profiles": {
+      "get": {
+        "operationId": "searchProfiles",
+        "description": "Search runners by name or username. Match semantics and limits are still technical proposals; do not silently restrict product search to username-only. Exclude deleted/suspended accounts and apply blocks.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/profiles/{id}": {
+      "get": {
+        "operationId": "getPublicProfile",
+        "description": "Authenticated public profile with current access rules. Never returns email, birth date or private drafts.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "getOwnProfile",
+        "description": "Owner profile only; account admission is a separate workflow.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "x-requires-beta-admission": true
+      },
+      "patch": {
+        "operationId": "patchOwnProfile",
+        "description": "Owner changes profile fields, not age eligibility or operational roles. No birth date changes or role management through this route.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchOwnProfile"
+              }
+            }
+          }
+        },
+        "x-requires-beta-admission": true
+      },
+      "delete": {
+        "operationId": "deleteOwnAccount",
+        "tags": [
+          "Account"
+        ],
+        "description": "Explicit confirmed owner request. Block API access and hide profile/content on acceptance, including requests using previously issued tokens; cleanup asynchronous. No deadline or retention exception invented. Receipt returned once before access is disabled; recovery/support mechanism is pending and must not reopen normal API access. No automatic refund of beta slot.",
+        "responses": {
+          "202": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/profiles/{id}/participations": {
+      "get": {
+        "operationId": "listPublicParticipations",
+        "description": "Completed authorized history only. No drafts. Hide time/pace/placement according to each participation and apply deletion, blocks and account state. Hidden feed post alone does not hide completed profile history.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/profiles/{id}/medals": {
+      "get": {
+        "operationId": "listPublicMedals",
+        "description": "Authorized medals associated with completed history; excludes removed participation and does not leak hidden results.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedalPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/edition-requests": {
+      "post": {
+        "operationId": "createEditionRequest",
+        "description": "Owner submits required name/date/city/distance. Request stays private pending review, not an automatic public edition.",
+        "responses": {
+          "201": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditionRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "EditionRequests"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditionRequestFields"
+              }
+            }
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/me/edition-requests": {
+      "get": {
+        "operationId": "listMyEditionRequests",
+        "description": "Owner list including review outcomes; no other users private requests.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditionRequestPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "EditionRequests"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/edition-requests/{id}": {
+      "get": {
+        "operationId": "getEditionRequest",
+        "description": "Owner-only request and decision. Admin review is a separate privileged contract.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditionRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "EditionRequests"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      },
+      "patch": {
+        "operationId": "patchEditionRequest",
+        "description": "Correct rejected request, preserving participation draft; no review decision or automatic resubmission. State and version revalidated.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditionRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "EditionRequests"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchEditionRequest"
+              }
+            }
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/edition-requests/{id}/resubmit": {
+      "post": {
+        "operationId": "resubmitEditionRequest",
+        "description": "Resubmit corrected rejected request for human review, preserving draft. Required fields must remain valid; transition rejected -> pending.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditionRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "tags": [
+          "EditionRequests"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResubmitEditionRequest"
+              }
+            }
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/feed": {
+      "get": {
+        "operationId": "getFeed",
+        "tags": [
+          "Feed"
+        ],
+        "description": "Followed authors first, other eligible public authors second; newest original publishedAt first within each group, stable tie-breaker. Cursor must preserve group/filter/user context. Recheck visibility, deletion, account status and bilateral blocks. Do not restrict all content to shared editions. No algorithmic ranking approved.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/posts/{id}": {
+      "get": {
+        "operationId": "getPost",
+        "tags": [
+          "Feed"
+        ],
+        "description": "Return a currently authorized visible post. Hiding does not delete the underlying participation; no lake audit history returned.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      },
+      "patch": {
+        "operationId": "patchPostVisibility",
+        "tags": [
+          "Feed"
+        ],
+        "description": "Owner sets visibility without deleting participation or changing original publication date. Only confirmed state changes emit effects; no duplicate notices on retries. This response may acknowledge hidden state even though public GET no longer returns the post.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostVisibility"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchPost"
+              }
+            }
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/profiles/{id}/follow": {
+      "put": {
+        "operationId": "putFollow",
+        "tags": [
+          "Social"
+        ],
+        "description": "Idempotent follow, at most one active relation per actor/target. Reject self-follow and any bilateral block; recheck concurrently with block commands. Confirmed block removes follow in both directions. Retry never recreates a blocked relation or duplicates notifications/counters; unblock requires explicit new follow.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Relationship"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "x-requires-beta-admission": true
+      },
+      "delete": {
+        "operationId": "deleteFollow",
+        "tags": [
+          "Social"
+        ],
+        "description": "Idempotently remove the caller relation only. Never grant access to deleted, hidden or suspended content. Do not silently recreate follow or notifications.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Relationship"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/profiles/{id}/block": {
+      "put": {
+        "operationId": "putBlock",
+        "tags": [
+          "Social"
+        ],
+        "description": "Confirm caller block and remove follow relationships in BOTH directions. Prevent new follows, likes and comments while either-direction block is active. Preserve and hide previous likes/comments between involved users. Repeated requests must converge without duplicate side effects; handle concurrent follow/block consistently and update feed priority/counters. Unblocking never recreates removed follows.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Relationship"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "x-requires-beta-admission": true
+      },
+      "delete": {
+        "operationId": "deleteBlock",
+        "tags": [
+          "Social"
+        ],
+        "description": "Remove caller block idempotently. Preserved prior interactions become eligible only if currently authorized: opposite block, deletion, hiding, suspension and moderation remain effective. Do not recreate either-direction follow relationships removed by blocking; each actor may explicitly follow again if allowed.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Relationship"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/posts/{id}/like": {
+      "put": {
+        "operationId": "likePost",
+        "tags": [
+          "Social"
+        ],
+        "description": "At most one active like per actor/post. Check post access and blocks; idempotent retry must not duplicate notice or counters. Self-interactions never count toward beta social metric.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LikeState"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "x-requires-beta-admission": true
+      },
+      "delete": {
+        "operationId": "unlikePost",
+        "tags": [
+          "Social"
+        ],
+        "description": "Idempotent removal of own like. Behavior when post becomes inaccessible must avoid leaking its existence; final error policy pending.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LikeState"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/posts/{id}/comments": {
+      "get": {
+        "operationId": "listPostComments",
+        "tags": [
+          "Social"
+        ],
+        "description": "Only authorized visible comments and authors; apply moderation, deletion and bilateral blocks before returning.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      },
+      "post": {
+        "operationId": "createPostComment",
+        "tags": [
+          "Social"
+        ],
+        "description": "Authenticated actor may comment only on accessible post. Durable create and idempotency prevent retry duplicates. No private messaging, replies or mentions introduced.",
+        "responses": {
+          "201": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateComment"
+              }
+            }
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/comments/{id}": {
+      "delete": {
+        "operationId": "deleteOwnComment",
+        "tags": [
+          "Social"
+        ],
+        "description": "Owner removes own comment; moderator removal uses privileged route elsewhere. Public visibility stops on confirmation. Cleanup asynchronous if required; no implicit authorization to erase other users comments.",
+        "responses": {
+          "204": {
+            "description": "Authorized result"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "x-requires-beta-admission": true
+      },
+      "patch": {
+        "operationId": "editOwnComment",
+        "tags": [
+          "Social"
+        ],
+        "description": "Author-only text edit with optimistic version and idempotency. Preserve createdAt and existing identity; set edited=true and editedAt on actual text change. Replay or unchanged text must not generate a new edit timestamp. Recheck post visibility, deletion, moderation, account state and bilateral blocks; an edit must not republish hidden content. No role or author changes accepted. Lake history approved for reviews is not automatically extended to social comments.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchComment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated owned comment, or same idempotent result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/me/wishlist": {
+      "get": {
+        "operationId": "listMyWishlist",
+        "tags": [
+          "Wishlist"
+        ],
+        "description": "Owner can read saved editions regardless of public preference.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/profiles/{id}/wishlist": {
+      "get": {
+        "operationId": "getPublicWishlist",
+        "tags": [
+          "Wishlist"
+        ],
+        "description": "Default public but owner may hide; recheck current preference and blocks. Do not return an empty list to pretend an access denial is an actual empty wishlist. Exact denial status policy pending.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/me/wishlist/{id}": {
+      "put": {
+        "operationId": "saveWishlistEdition",
+        "tags": [
+          "Wishlist"
+        ],
+        "description": "id is editionId. Idempotently save a future edition; revalidate catalog status and avoid duplicates. Behavior after event date passes needs final specification.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistState"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "x-requires-beta-admission": true
+      },
+      "delete": {
+        "operationId": "removeWishlistEdition",
+        "tags": [
+          "Wishlist"
+        ],
+        "description": "id is editionId. Owner removes saved edition idempotently. Does not cancel any external registration.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistState"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/me/wishlist/visibility": {
+      "put": {
+        "operationId": "setWishlistVisibility",
+        "tags": [
+          "Wishlist"
+        ],
+        "description": "Replace own wishlist visibility preference, public by default. Changes must affect public reads immediately after confirmation despite cached lists.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistVisibility"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WishlistPreference"
+              }
+            }
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/me/notices": {
+      "get": {
+        "operationId": "listMyNotices",
+        "tags": [
+          "Notices"
+        ],
+        "description": "Owner-only in-app notices. No mobile push introduced. Retention and bundling policies pending.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-requires-beta-admission": true
+      }
+    },
+    "/me/notices/{id}/read": {
+      "put": {
+        "operationId": "markNoticeRead",
+        "tags": [
+          "Notices"
+        ],
+        "description": "Idempotently mark own notice as read; read-state is a technical proposal, not an additional notification channel.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notice"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadNotice"
+              }
+            }
+          }
+        },
+        "x-requires-beta-admission": true
+      }
+    },
+    "/beta/status": {
+      "get": {
+        "operationId": "getMyBetaStatus",
+        "tags": [
+          "Beta"
+        ],
+        "description": "Bootstrap route available to authenticated users before admission; no other participant details. Never equate Cognito signup with a consumed beta slot.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BetaStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false
+      }
+    },
+    "/beta/admissions": {
+      "post": {
+        "operationId": "admitToBeta",
+        "tags": [
+          "Beta"
+        ],
+        "description": "Verified authenticated eligible user enters if capacity exists. Transaction reserves unique admission and increments total exactly once, including concurrent 50th/1000th transitions. Same replay never consumes a second slot. If full or closed return 409 with a stable error code; do not silently enroll in waitlist. Identity may exist before admission but product access remains blocked.",
+        "responses": {
+          "201": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BetaAdmission"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BetaAdmissionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/beta/waitlist": {
+      "post": {
+        "operationId": "joinBetaWaitlist",
+        "tags": [
+          "Beta"
+        ],
+        "description": "Authenticated eligible user explicitly joins private waitlist after capacity is reached; no email link needed for installation. Does not consume admission or activation denominator. Deduplicate by identity. Reuse eligibility validation and avoid unnecessary duplicate birth-date storage.",
+        "responses": {
+          "201": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistEntry"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BetaAdmissionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/waitlist": {
+      "get": {
+        "operationId": "getMyWaitlistEntry",
+        "tags": [
+          "Beta"
+        ],
+        "description": "Own waitlist only; waiting user need not be admitted.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistEntry"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false
+      },
+      "delete": {
+        "operationId": "removeMyWaitlistEntry",
+        "tags": [
+          "Beta"
+        ],
+        "description": "Remove own waitlist entry without changing lifetime admitted count. Any data-retention exception requires privacy policy.",
+        "responses": {
+          "204": {
+            "description": "Authorized result"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/reports": {
+      "post": {
+        "operationId": "createReport",
+        "tags": [
+          "Safety"
+        ],
+        "description": "Submit private report for human moderation. Does not remove content automatically and never returns reporter to public callers.",
+        "responses": {
+          "201": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReport"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/feedback": {
+      "post": {
+        "operationId": "submitFeedback",
+        "tags": [
+          "Feedback"
+        ],
+        "description": "Voluntary beta feedback. Technical category survey supports approved in-app questionnaires, not a new compulsory step. Processing permission for waiting users must be reviewed.",
+        "responses": {
+          "201": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/edition-requests": {
+      "get": {
+        "operationId": "listPendingEditionRequests",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Admin-only review queue, optionally filtered by status; index eventual but action revalidates current state.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditionRequestPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "rejected",
+                "approved",
+                "linked"
+              ]
+            }
+          }
+        ],
+        "x-required-role": "administrator",
+        "x-requires-mfa": true
+      }
+    },
+    "/admin/edition-requests/{id}/decision": {
+      "post": {
+        "operationId": "reviewEditionRequest",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Approve/link request to validated catalog edition or reject with reason; preserve associated draft and emit notice. Does not complete participation automatically.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditionRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewRequestDecision"
+              }
+            }
+          }
+        },
+        "x-required-role": "administrator",
+        "x-requires-mfa": true
+      }
+    },
+    "/admin/editions": {
+      "post": {
+        "operationId": "createCatalogEdition",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Administrator creates catalog edition, not automatic organizer self-service.",
+        "responses": {
+          "201": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Edition"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminEditionInput"
+              }
+            }
+          }
+        },
+        "x-required-role": "administrator",
+        "x-requires-mfa": true
+      }
+    },
+    "/admin/editions/{id}": {
+      "patch": {
+        "operationId": "patchCatalogEdition",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Administrator corrects catalog metadata with version check and audit. Distance changes preserve references. Replacing official medal image affects new bindings only; existing medals retain immutable bound version and user photos stay unchanged. Do not erase referenced objects or use generic PATCH to unarchive. Retroactive medal-image correction needs a separate explicit audited action, not specified here. Official image binding accepts only a validated administrative image reference for the same edition/distance and environment; reject pending/failed, foreign-target or runner-upload references. Preserve the previous binding on failure. Confirm explicitly after preview using expectedVersion and idempotency; audit actor, target and old/new references without signed URLs. The upload itself never publishes.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Edition"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminEditionPatch"
+              }
+            }
+          }
+        },
+        "x-required-role": "administrator",
+        "x-requires-mfa": true
+      }
+    },
+    "/admin/editions/{id}/archive": {
+      "post": {
+        "operationId": "archiveCatalogEdition",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Archive blocks new participations, draft completion and inbound transfers. Existing history remains readable/editable/deletable. Concurrency rechecked in completion path.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrativeResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveEdition"
+              }
+            }
+          }
+        },
+        "x-required-role": "administrator",
+        "x-requires-mfa": true
+      }
+    },
+    "/admin/reports": {
+      "get": {
+        "operationId": "listModerationReports",
+        "tags": [
+          "Moderation"
+        ],
+        "description": "Moderator-only queue; do not infer administrator inherits moderator permission. Assign both roles explicitly if required.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-required-role": "moderator",
+        "x-requires-mfa": true
+      }
+    },
+    "/admin/moderation-actions": {
+      "post": {
+        "operationId": "applyModerationAction",
+        "tags": [
+          "Moderation"
+        ],
+        "description": "Moderator with MFA applies an audited action with reason. Rating invalidation preserves participation, medal and post; correction remains pending until approved. No permission management here.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrativeResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerationCommand"
+              }
+            }
+          }
+        },
+        "x-required-role": "moderator",
+        "x-requires-mfa": true
+      }
+    },
+    "/admin/profiles/{id}/roles": {
+      "put": {
+        "operationId": "setOperationalRole",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Specifically privileged administrator manages an explicit operational role. Do not grant access to lake merely by administrator name. Revocations must affect API authorization, not only UI.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrativeResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleChange"
+              }
+            }
+          }
+        },
+        "x-required-role": "administrator",
+        "x-requires-mfa": true
+      }
+    },
+    "/admin/reviews/{id}/history": {
+      "get": {
+        "operationId": "getRestrictedReviewHistory",
+        "tags": [
+          "Audit"
+        ],
+        "description": "Explicitly authorized administrator with MFA and separate review-history:read grant only. Not accessible to ordinary admins by default, moderators or runners. Audit every query; filter expired/deleted records according to privacy policy. Asynchronous delivery may delay latest events. No arbitrary S3 object browsing or editable history.",
+        "responses": {
+          "200": {
+            "description": "Authorized result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewAuditPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "x-required-role": "administrator",
+        "x-requires-mfa": true,
+        "x-required-permission": "review-history:read"
+      }
+    },
+    "/admin/reports/{id}/resolution": {
+      "post": {
+        "operationId": "resolveModerationReport",
+        "tags": [
+          "Moderation"
+        ],
+        "description": "Moderator with MFA resolves report with decision and reason. Revalidate version, ownership of operational scope and referenced action. Persist audit record. Idempotent retry returns same resolution; conflicting resolution yields 409. No automatic suspension/removal and no public internal rationale. Reopen policy not yet specified.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveReport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Restricted report resolution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResolution"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-required-role": "moderator",
+        "x-requires-mfa": true,
+        "x-requires-beta-admission": false
+      }
+    },
+    "/admin/organizers": {
+      "get": {
+        "operationId": "listCatalogOrganizers",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Administrator-only catalog reference management with MFA and audit. Reject blank names, preserve edition references, enforce version/idempotency on writes. No organizer login or private contacts introduced. Search matching and deduplication policy pending.",
+        "responses": {
+          "200": {
+            "description": "Authorized catalog reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizerPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-required-role": "administrator",
+        "x-requires-mfa": true,
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createCatalogOrganizer",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Administrator-only catalog reference management with MFA and audit. Reject blank names, preserve edition references, enforce version/idempotency on writes. No organizer login or private contacts introduced. Search matching and deduplication policy pending.",
+        "responses": {
+          "201": {
+            "description": "Authorized catalog reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organizer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-required-role": "administrator",
+        "x-requires-mfa": true,
+        "x-requires-beta-admission": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrganizer"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/admin/organizers/{id}": {
+      "get": {
+        "operationId": "getCatalogOrganizer",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Administrator-only catalog reference management with MFA and audit. Reject blank names, preserve edition references, enforce version/idempotency on writes. No organizer login or private contacts introduced. Search matching and deduplication policy pending.",
+        "responses": {
+          "200": {
+            "description": "Authorized catalog reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organizer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-required-role": "administrator",
+        "x-requires-mfa": true,
+        "x-requires-beta-admission": false,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patchCatalogOrganizer",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Administrator-only catalog reference management with MFA and audit. Reject blank names, preserve edition references, enforce version/idempotency on writes. No organizer login or private contacts introduced. Search matching and deduplication policy pending.",
+        "responses": {
+          "200": {
+            "description": "Authorized catalog reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organizer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-required-role": "administrator",
+        "x-requires-mfa": true,
+        "x-requires-beta-admission": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchOrganizer"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/admin/medal-image-uploads": {
+      "post": {
+        "operationId": "startAdminMedalImageUpload",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Authorize a private temporary JPEG/PNG upload for an existing edition and optional distance. Check administrator permission and MFA at the API. Validate real format, size and decodability on the server after upload. User-owned upload references cannot be promoted through this flow. Does not change catalog or consume a runner beta slot.",
+        "x-required-role": "administrator",
+        "x-requires-mfa": true,
+        "x-requires-beta-admission": false,
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "201": {
+            "description": "Upload session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMedalImageUploadSession"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminMedalImageUploadInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/medal-image-uploads/{id}/finalize": {
+      "post": {
+        "operationId": "finalizeAdminMedalImageUpload",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Verify session target and uploaded object; start retry-safe validation. Reject expired or mismatched session with 409. Remove GPS, preserve orientation and optimize toward 1 MB. Repeated finalization must not duplicate processing effects. Pending or failed images cannot be linked; exceeding the five-second target does not imply success or invalidity. Catalog publication remains a separate version-checked PATCH.",
+        "x-required-role": "administrator",
+        "x-requires-mfa": true,
+        "x-requires-beta-admission": false,
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "200": {
+            "description": "Validation finished: valid or failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMedalImageUploadStatus"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Validation pending; catalog remains unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMedalImageUploadStatus"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/admin/medal-image-uploads/{id}": {
+      "get": {
+        "operationId": "getAdminMedalImageUpload",
+        "tags": [
+          "Administration"
+        ],
+        "description": "Read an authorized administrative upload session and processing state. Authorize administrator/MFA and target access on every call; unguessable IDs are not authorization.",
+        "x-required-role": "administrator",
+        "x-requires-mfa": true,
+        "x-requires-beta-admission": false,
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "200": {
+            "description": "Current processing state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMedalImageUploadStatus"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Escopo por ator e operação; corpo diferente com mesma chave gera conflito."
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Falha sem conclusão parcial; código HTTP distingue autenticação, acesso, conflito e validação",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "correlationId"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "correlationId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Rating": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5
+      },
+      "CompleteParticipation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "declaredCompleted",
+          "ratings",
+          "medalImageReference",
+          "publishToFeed"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "declaredCompleted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "medalImageReference": {
+            "type": "string",
+            "description": "Imagem do catálogo ou upload do usuário validado; formato de referência ainda em revisão."
+          },
+          "publishToFeed": {
+            "type": "boolean",
+            "default": true
+          },
+          "comment": {
+            "type": "string",
+            "description": "Opcional; limite de tamanho pendente."
+          },
+          "ratings": {
+            "$ref": "#/components/schemas/ReviewRatings"
+          }
+        }
+      },
+      "Participation": {
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "version"
+        ],
+        "description": "Authorized projection. Optional and hidden results are omitted for other callers. Birth date and private draft data are never public.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "editionId": {
+            "type": "string"
+          },
+          "editionRequestId": {
+            "type": "string",
+            "description": "Owner-only draft field."
+          },
+          "distanceId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "completed"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "timeSeconds": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "paceSecondsPerKm": {
+            "type": "number",
+            "minimum": 0
+          },
+          "placement": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "bibNumber": {
+            "type": "string",
+            "description": "Visibility not yet approved; do not include in public projections by default."
+          },
+          "medalImageReference": {
+            "type": "string"
+          }
+        }
+      },
+      "UploadStatus": {
+        "type": "object",
+        "required": [
+          "uploadId",
+          "state"
+        ],
+        "properties": {
+          "uploadId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "valid",
+              "failed"
+            ]
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "imageReference": {
+            "type": "string",
+            "description": "Disponível apenas após validação."
+          }
+        }
+      },
+      "ReviewRatings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organization",
+          "course",
+          "kit",
+          "medal",
+          "hydration",
+          "facilities",
+          "safety",
+          "valueForMoney"
+        ],
+        "properties": {
+          "organization": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "course": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "kit": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "medal": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "hydration": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "facilities": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "safety": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "valueForMoney": {
+            "$ref": "#/components/schemas/Rating"
+          }
+        }
+      },
+      "ReplaceReview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "ratings"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ratings": {
+            "$ref": "#/components/schemas/ReviewRatings"
+          },
+          "comment": {
+            "type": "string",
+            "description": "Optional; omission in PUT removes previous current comment. Preserve before/after audit event in restricted lake, retained 60 days from original occurrence. Privacy erasure policy still requires specification."
+          }
+        }
+      },
+      "Review": {
+        "type": "object",
+        "required": [
+          "participationId",
+          "version",
+          "ratings",
+          "moderationState"
+        ],
+        "properties": {
+          "participationId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ratings": {
+            "$ref": "#/components/schemas/ReviewRatings"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "moderationState": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "invalidated",
+              "pending_review"
+            ]
+          }
+        }
+      },
+      "PatchParticipation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "minProperties": 2,
+        "description": "Only supplied fields change; null clears optional results. Does not accept review ratings/comment: use PUT /review. expectedVersion and at least one field required. distanceKm applies only to a request draft. New field formats remain technical proposals.",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "editionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "distanceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timeSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "placement": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "bibNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "showTime": {
+            "type": "boolean",
+            "description": "False also hides pace in every authorized projection."
+          },
+          "showPlacement": {
+            "type": "boolean"
+          },
+          "medalImageReference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "distanceKm": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Only for a missing-edition request draft before it has a catalog distanceId. Final completion resolves a valid catalog distance."
+          }
+        }
+      },
+      "ParticipationPatchFields": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Somente campos enviados s?o alterados. Null limpa resultados opcionais. N?o aceita ratings/comment de avalia??o; usar PUT /review. Unidades e formato abaixo s?o propostas t?cnicas.",
+        "properties": {
+          "editionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "distanceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timeSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "placement": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "bibNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "showTime": {
+            "type": "boolean",
+            "description": "False tamb?m oculta pace."
+          },
+          "showPlacement": {
+            "type": "boolean"
+          },
+          "medalImageReference": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "CreateParticipation": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Creates a private draft, not a completed participation. Source must be exactly one approved edition or a request owned by the caller.",
+        "properties": {
+          "editionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "editionRequestId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "distanceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timeSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "placement": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "bibNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "distanceKm": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Used with owned editionRequestId until catalog distanceId exists."
+          }
+        },
+        "oneOf": [
+          {
+            "required": [
+              "editionId",
+              "distanceId"
+            ],
+            "not": {
+              "required": [
+                "editionRequestId"
+              ]
+            }
+          },
+          {
+            "required": [
+              "editionRequestId",
+              "distanceKm"
+            ],
+            "not": {
+              "required": [
+                "editionId"
+              ]
+            }
+          }
+        ]
+      },
+      "CompletedParticipation": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Participation"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "completed"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "ParticipationPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Participation"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "DeletionOperation": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "state",
+          "publiclyHidden"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "needs_attention"
+            ]
+          },
+          "publiclyHidden": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        }
+      },
+      "Distance": {
+        "type": "object",
+        "required": [
+          "id",
+          "kilometers"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kilometers": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "minimum": 0
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "medalImageReference": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Current official image for new bindings in this distance; existing medals retain their bound version."
+          }
+        }
+      },
+      "RunScore": {
+        "type": "object",
+        "required": [
+          "reviewCount"
+        ],
+        "properties": {
+          "value": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5,
+            "nullable": true,
+            "description": "Null if no valid reviews. Display one decimal."
+          },
+          "reviewCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Edition": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "date",
+          "city",
+          "state",
+          "distances",
+          "status",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "raceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "description": "Brazilian state code, distinct from edition status."
+          },
+          "distances": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/Distance"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "upcoming",
+              "past",
+              "archived"
+            ],
+            "description": "Draft status vocabulary; date and archival state must remain distinguishable."
+          },
+          "description": {
+            "type": "string"
+          },
+          "organizerName": {
+            "type": "string"
+          },
+          "imageReference": {
+            "type": "string"
+          },
+          "officialUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "registrationUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "runScore": {
+            "$ref": "#/components/schemas/RunScore"
+          },
+          "participantCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "medalImageReference": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Validated catalog medal image reference; optional when catalog image is unavailable. Never contains permanent S3 credentials."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "organizerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional catalog organizer reference; server validates existence. Not required for unknown historical organizer."
+          }
+        }
+      },
+      "EditionPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Edition"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Review"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "PublicProfile": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayName",
+          "username",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "photoReference": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          },
+          "participationCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "medalCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "OwnProfile": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PublicProfile"
+          }
+        ],
+        "description": "Owner projection currently uses only public profile fields. Private account fields require a separate explicit schema; do not append email or birth date to this response."
+      },
+      "PatchOwnProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "minProperties": 2,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "photoReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "description": "Only sent fields change. Null clears optional fields. Username changes must reserve normalized name atomically. Lengths and rename policy require review."
+      },
+      "ProfilePage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicProfile"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "PublicMedal": {
+        "type": "object",
+        "required": [
+          "participationId",
+          "editionId",
+          "imageReference"
+        ],
+        "properties": {
+          "participationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "editionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "imageReference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "distanceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timeSeconds": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "imageSource": {
+            "type": "string",
+            "enum": [
+              "catalog",
+              "user"
+            ],
+            "description": "Distinguishes official catalog image from runner-owned photo; do not expose raw S3 object keys. Field added for contract review."
+          },
+          "imageVersionReference": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Immutable content/version reference bound at medal registration, not a raw S3 key. Existing official medals keep this version when catalog reference changes."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Authorized medal projection. Hidden time omitted. Reference resolves to version bound at registration; catalog updates do not rewrite existing medal images. Own uploaded photos are separate. Any retroactive official-image correction requires explicit audited administration, not implicit GET behavior."
+      },
+      "MedalPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicMedal"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "EditionRequestFields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "date",
+          "city",
+          "distanceKm"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string"
+          },
+          "distanceKm": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "officialUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "imageReference": {
+            "type": "string"
+          }
+        }
+      },
+      "EditionRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "status",
+          "details"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "linked",
+              "rejected"
+            ]
+          },
+          "details": {
+            "$ref": "#/components/schemas/EditionRequestFields"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "linkedEditionId": {
+            "type": "string"
+          }
+        },
+        "description": "Owner-only view, not a public catalog record. Reviewed request preserves associated draft until owner completes it."
+      },
+      "PatchEditionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "minProperties": 2,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string"
+          },
+          "distanceKm": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "officialUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "imageReference": {
+            "type": "string"
+          }
+        },
+        "description": "Owner correction, no privileged review status fields. Proposed correction is allowed in rejected state; approved/linked requests point to the catalog rather than permit arbitrary edits."
+      },
+      "ResubmitEditionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "EditionRequestPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditionRequest"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "Post": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "author": {
+            "$ref": "#/components/schemas/PublicProfile"
+          },
+          "participation": {
+            "$ref": "#/components/schemas/Participation"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "likeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "commentCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "likedByMe": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "participation",
+          "publishedAt",
+          "version"
+        ],
+        "description": "Publicly visible authorized projection only. Preserve original publishedAt on edits; omit hidden results, drafts, removed content and private account fields."
+      },
+      "PatchPost": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "visible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "visible"
+        ]
+      },
+      "PostVisibility": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "visible": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "visible",
+          "version"
+        ]
+      },
+      "PostPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Post"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "Relationship": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "profileId",
+          "active"
+        ]
+      },
+      "LikeState": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "postId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "likedByMe": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "postId",
+          "likedByMe"
+        ]
+      },
+      "Comment": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "postId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "author": {
+            "$ref": "#/components/schemas/PublicProfile"
+          },
+          "text": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "edited": {
+            "type": "boolean",
+            "description": "True after a persisted text change. Display edited marker; createdAt is preserved."
+          },
+          "editedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent actual text change; absent before first edit."
+          }
+        },
+        "required": [
+          "id",
+          "postId",
+          "author",
+          "text",
+          "createdAt",
+          "version",
+          "edited"
+        ]
+      },
+      "CreateComment": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "description": "Whitespace-only text rejected. Length and rate limits pending technical review; not unlimited in implementation."
+      },
+      "CommentPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Comment"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "WishlistEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "edition": {
+            "$ref": "#/components/schemas/Edition"
+          },
+          "savedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "edition",
+          "savedAt"
+        ]
+      },
+      "WishlistPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WishlistEntry"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "WishlistState": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "editionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "saved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "editionId",
+          "saved"
+        ]
+      },
+      "WishlistPreference": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "public": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "public"
+        ]
+      },
+      "WishlistVisibility": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "public": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "public",
+          "version"
+        ]
+      },
+      "Notice": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "edition_request_reviewed",
+              "new_follower",
+              "post_liked",
+              "post_commented"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "resourceType": {
+            "type": "string"
+          },
+          "resourceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "createdAt",
+          "read"
+        ],
+        "description": "Owner-only notice; no permanent access to referenced resource. Opening rechecks current access. Do not include old review text, hidden results or sensitive payload in a notice."
+      },
+      "NoticePage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notice"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadNotice": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "read": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "read"
+        ]
+      },
+      "BetaAdmissionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "birthDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "declaresAdult": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "birthDate",
+          "declaresAdult"
+        ],
+        "description": "Authenticated verified identity required. Server validates complete age >=18 at admission; birth date private. Future, impossible or underage dates rejected. Never trust an age computed only by client."
+      },
+      "BetaAdmission": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "admitted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "admittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "betaEndsAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "admitted",
+          "admittedAt"
+        ],
+        "description": "betaEndsAt only available after the 50th admission starts the 60-day window. Do not fabricate a date before that threshold."
+      },
+      "BetaStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "myStatus": {
+            "type": "string",
+            "enum": [
+              "not_admitted",
+              "admitted",
+              "waiting",
+              "closed"
+            ]
+          },
+          "admissionsOpen": {
+            "type": "boolean"
+          },
+          "betaEndsAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "myStatus",
+          "admissionsOpen"
+        ]
+      },
+      "WaitlistEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "removed"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "createdAt"
+        ],
+        "description": "No automatic admission or promised queue position. Private entry for authenticated eligible identity."
+      },
+      "AccountDeletionReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "accepted"
+            ]
+          },
+          "accessBlocked": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "publiclyHidden": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "operationId",
+          "state",
+          "accessBlocked",
+          "publiclyHidden"
+        ],
+        "description": "Receipt is not proof that all physical copies/backups/lake records have been erased. Status retrieval after account access is blocked requires a separate approved support flow."
+      },
+      "CreateReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "profile",
+              "post",
+              "comment",
+              "review"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "details": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "targetType",
+          "targetId",
+          "reason"
+        ],
+        "description": "Report text and identity private; server validates target visibility and prevents arbitrary enumeration. Reason vocabulary and text limits pending."
+      },
+      "ReportReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "received",
+              "under_review",
+              "resolved"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "createdAt"
+        ]
+      },
+      "FeedbackInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "problem",
+              "suggestion",
+              "praise",
+              "survey"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "surveyKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "description": "Voluntary feedback; no hidden results or birth date automatically attached. Content requirements differ by survey and still need definition."
+      },
+      "FeedbackReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "receivedAt"
+        ]
+      },
+      "ReviewRequestDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "link",
+              "reject"
+            ]
+          },
+          "editionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "decision"
+        ],
+        "description": "Link/approve require existing editionId. Reject requires reason. Conditions enforced below and by server.",
+        "oneOf": [
+          {
+            "properties": {
+              "decision": {
+                "enum": [
+                  "approve",
+                  "link"
+                ]
+              }
+            },
+            "required": [
+              "editionId"
+            ]
+          },
+          {
+            "properties": {
+              "decision": {
+                "enum": [
+                  "reject"
+                ]
+              }
+            },
+            "required": [
+              "reason"
+            ],
+            "not": {
+              "required": [
+                "editionId"
+              ]
+            }
+          }
+        ]
+      },
+      "ArchiveEdition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "reason"
+        ]
+      },
+      "ModerationCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "hide_comment",
+              "invalidate_ratings",
+              "approve_correction",
+              "remove_content",
+              "suspend_account"
+            ]
+          },
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "review",
+              "post",
+              "comment",
+              "profile"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "action",
+          "targetType",
+          "targetId",
+          "reason"
+        ],
+        "description": "Allowed action/target combinations must be validated. Never interpret hide_comment as deleting ratings. Approval of correction requires all eight current ratings.",
+        "oneOf": [
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "hide_comment",
+                  "invalidate_ratings",
+                  "approve_correction"
+                ]
+              },
+              "targetType": {
+                "enum": [
+                  "review"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "remove_content"
+                ]
+              },
+              "targetType": {
+                "enum": [
+                  "post",
+                  "comment"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "action": {
+                "enum": [
+                  "suspend_account"
+                ]
+              },
+              "targetType": {
+                "enum": [
+                  "profile"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "AdministrativeResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "operationId",
+          "targetId",
+          "state"
+        ]
+      },
+      "RoleChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "administrator",
+              "moderator"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "role",
+          "enabled",
+          "reason"
+        ],
+        "description": "No self-escalation. Bootstrap first admin, last-admin safeguards and revocation timing still require review."
+      },
+      "ReportPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportReceipt"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "AdminEditionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "raceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "description": "Brazilian state code, distinct from edition status."
+          },
+          "distances": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/Distance"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "upcoming",
+              "past"
+            ],
+            "description": "Archiving existing edition uses dedicated command."
+          },
+          "description": {
+            "type": "string"
+          },
+          "organizerName": {
+            "type": "string"
+          },
+          "imageReference": {
+            "type": "string"
+          },
+          "officialUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "registrationUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "medalImageReference": {
+            "type": "string",
+            "nullable": true,
+            "description": "Validated current official catalog image. Replacement applies to new medal bindings; existing medals retain their bound immutable image version. Never alter user photos or delete referenced versions. Retroactive correction requires explicit audited action; clearing catalog reference does not erase old medals."
+          },
+          "organizerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional catalog organizer reference; server validates existence. Not required for unknown historical organizer."
+          }
+        },
+        "required": [
+          "name",
+          "date",
+          "city",
+          "state",
+          "distances"
+        ],
+        "description": "Draft administrative catalog schema. Derived score/count cannot be set by client. Distances and medal images require validation. Status/archive edits through generic PATCH prohibited."
+      },
+      "AdminEditionPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "raceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "description": "Brazilian state code, distinct from edition status."
+          },
+          "distances": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/Distance"
+            }
+          },
+          "description": {
+            "type": "string"
+          },
+          "organizerName": {
+            "type": "string"
+          },
+          "imageReference": {
+            "type": "string"
+          },
+          "officialUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "registrationUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "medalImageReference": {
+            "type": "string",
+            "nullable": true,
+            "description": "Validated current official catalog image. Replacement applies to new medal bindings; existing medals retain their bound immutable image version. Never alter user photos or delete referenced versions. Retroactive correction requires explicit audited action; clearing catalog reference does not erase old medals."
+          },
+          "organizerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional catalog organizer reference; server validates existence. Not required for unknown historical organizer."
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ],
+        "description": "Proposal: at least one editable field beyond expectedVersion; metadata only, archive through command.",
+        "minProperties": 2
+      },
+      "AuditSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ratings": {
+            "$ref": "#/components/schemas/ReviewRatings"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ReviewAuditRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "eventType": {
+            "type": "string",
+            "minLength": 1,
+            "enum": [
+              "ReviewCreated",
+              "ReviewReplaced",
+              "ReviewDeleted",
+              "ReviewModerated"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reviewId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "before": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": false,
+            "properties": {
+              "ratings": {
+                "$ref": "#/components/schemas/ReviewRatings"
+              },
+              "comment": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "after": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": false,
+            "properties": {
+              "ratings": {
+                "$ref": "#/components/schemas/ReviewRatings"
+              },
+              "comment": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          }
+        },
+        "required": [
+          "eventId",
+          "schemaVersion",
+          "eventType",
+          "occurredAt",
+          "expiresAt",
+          "reviewId",
+          "aggregateVersion",
+          "correlationId",
+          "before",
+          "after"
+        ],
+        "description": "Restricted lake projection, never returned by public review APIs. Exclude expired records at query time; retention from original occurrence. Audit envelope in separate JSON Schema is authoritative pending consistency validation."
+      },
+      "ReviewAuditPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewAuditRecord"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "PatchComment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "text"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Whitespace-only text rejected by server; maximum length still pending."
+          }
+        }
+      },
+      "ResolveReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "decision",
+          "reason"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "substantiated",
+              "unsubstantiated",
+              "insufficient_evidence"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Internal rationale; reject whitespace-only text. Maximum length pending."
+          },
+          "moderationActionId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional reference to an explicitly executed action, not an automatic enforcement request."
+          }
+        }
+      },
+      "ReportResolution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reportId",
+          "version",
+          "state",
+          "decision",
+          "reason",
+          "resolvedAt"
+        ],
+        "properties": {
+          "reportId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "resolved"
+            ]
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "substantiated",
+              "unsubstantiated",
+              "insufficient_evidence"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "moderationActionId": {
+            "type": "string"
+          }
+        },
+        "description": "Internal projection only; no addition to public report receipts or user notices by inference."
+      },
+      "Organizer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "description": "Catalog reference only, not an application identity, operational role or portal account."
+      },
+      "CreateOrganizer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "PatchOrganizer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "name"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "OrganizerPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Organizer"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "AdminMedalImageUploadInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "editionId",
+          "contentType",
+          "sizeBytes"
+        ],
+        "properties": {
+          "editionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "distanceId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional distance belonging to the target edition."
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png"
+            ]
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000000
+          }
+        }
+      },
+      "AdminMedalImageUploadSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "uploadId",
+          "uploadUrl",
+          "expiresAt",
+          "editionId",
+          "uploadMethod"
+        ],
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uploadUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "editionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "distanceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uploadHeaders": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "uploadMethod": {
+            "type": "string",
+            "enum": [
+              "PUT"
+            ],
+            "description": "HTTP method for the signed uploadUrl; send the file bytes with uploadHeaders."
+          }
+        },
+        "description": "Private temporary upload authorization; does not publish or bind the image. Required request headers, if any, are returned in uploadHeaders."
+      },
+      "AdminMedalImageUploadStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "uploadId",
+          "editionId",
+          "state"
+        ],
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "editionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "distanceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "valid",
+              "failed"
+            ]
+          },
+          "imageVersionReference": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Immutable validated reference; returned only when valid. Must be bound explicitly to the same catalog target."
+          },
+          "previewUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Temporary authorized URL of processed image only; returned only when valid."
+          },
+          "previewExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "failureCode": {
+            "type": "string",
+            "minLength": 1
+          },
+          "failureMessage": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "description": "Pending is not success. Valid includes imageVersionReference; failed includes failureCode and failureMessage. No original unprocessed image is served. Five-second target after upload under normal conditions is subject to testing, not a hard timeout.",
+        "oneOf": [
+          {
+            "properties": {
+              "state": {
+                "enum": [
+                  "pending"
+                ]
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "imageVersionReference"
+                  ]
+                },
+                {
+                  "required": [
+                    "previewUrl"
+                  ]
+                },
+                {
+                  "required": [
+                    "failureCode"
+                  ]
+                },
+                {
+                  "required": [
+                    "failureMessage"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "state": {
+                "enum": [
+                  "valid"
+                ]
+              }
+            },
+            "required": [
+              "imageVersionReference"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "failureCode"
+                  ]
+                },
+                {
+                  "required": [
+                    "failureMessage"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "state": {
+                "enum": [
+                  "failed"
+                ]
+              }
+            },
+            "required": [
+              "failureCode",
+              "failureMessage"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "imageVersionReference"
+                  ]
+                },
+                {
+                  "required": [
+                    "previewUrl"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
