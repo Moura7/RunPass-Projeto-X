@@ -1,0 +1,21 @@
+meta {
+  name: 01 - Consultar status
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/beta/status
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{newRunnerToken}}
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

@@ -1,0 +1,338 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:runpass/catalog_screen.dart';
+import 'package:runpass/identity_gateway.dart';
+
+Map<String, dynamic> entry(String id, {bool archived = false}) => {
+  'id': id,
+  'name': 'Corrida $id',
+  'date': '2026-09-01',
+  'city': 'São Paulo',
+  'state': 'SP',
+  'status': archived ? 'archived' : 'past',
+  'version': 1,
+  'description': 'Dados sintéticos para desenvolvimento.',
+  'distances': [
+    {'id': '5k', 'kilometers': 5},
+    {'id': '10k', 'kilometers': 10},
+  ],
+};
+
+Future<IdentityGateway> signed(
+  JsonTransport handler, {
+  String api = 'https://api.example',
+}) async {
+  final gateway = IdentityGateway(
+    cognito: Uri.parse('https://cognito.example'),
+    api: Uri.parse(api),
+    clientId: 'synthetic',
+    transport: (uri, method, headers, body) async {
+      if (uri.host == 'cognito.example') {
+        return const JsonReply(200, {
+          'AuthenticationResult': {'AccessToken': 'synthetic'},
+        });
+      }
+      return handler(uri, method, headers, body);
+    },
+  );
+  await gateway.signIn('synthetic@example.test', 'synthetic');
+  return gateway;
+}
+
+Future<void> reveal(
+  WidgetTester tester,
+  Finder target, {
+  bool backwards = false,
+}) async {
+  final scroll = find
+      .descendant(
+        of: find.byType(CatalogScreen),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  await tester.scrollUntilVisible(
+    target.hitTestable(),
+    backwards ? -160 : 160,
+    scrollable: scroll,
+  );
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  test('query parameters preserve stage and encode filters without leaking into path', () async {
+    final gateway = await signed((uri, method, headers, body) async {
+      expect(uri.path, '/dev/editions');
+      expect(uri.queryParameters['city'], 'São Paulo');
+      expect(uri.queryParameters['cursor'], 'opaque+/=');
+      expect(headers['Authorization'], 'Bearer synthetic');
+      return const JsonReply(200, {'items': []});
+    }, api: 'https://api.example/dev');
+    await gateway.request(
+      '/editions',
+      query: {'city': 'São Paulo', 'cursor': 'opaque+/='},
+    );
+  });
+
+  testWidgets(
+    'catalog filters and empty page keep continuation and append results',
+    (tester) async {
+      final calls = <Map<String, String>>[];
+      final gateway = await signed((uri, method, headers, body) async {
+        expect(uri.path, '/editions');
+        calls.add(uri.queryParameters);
+        if (uri.queryParameters['cursor'] == 'next') {
+          return JsonReply(200, {
+            'items': [entry('B')],
+          });
+        }
+        if (uri.queryParameters['city'] == 'Santos') {
+          return const JsonReply(200, {'items': []});
+        }
+        return const JsonReply(200, {'items': [], 'nextCursor': 'next'});
+      });
+      await tester.pumpWidget(
+        MaterialApp(home: CatalogScreen(gateway: gateway)),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Nenhuma corrida nesta página. Continue a busca.'),
+        findsOneWidget,
+      );
+      await reveal(tester, find.text('Carregar mais'));
+      await tester.tap(find.text('Carregar mais'));
+      await tester.pumpAndSettle();
+      expect(find.text('Corrida B'), findsOneWidget);
+      expect(calls.last['cursor'], 'next');
+      await reveal(
+        tester,
+        find.widgetWithText(TextFormField, 'Cidade'),
+        backwards: true,
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Cidade'),
+        'Santos',
+      );
+      await reveal(tester, find.text('Buscar'));
+      await tester.tap(find.text('Buscar'));
+      await tester.pumpAndSettle();
+      expect(calls.last['city'], 'Santos');
+      expect(calls.last.containsKey('cursor'), false);
+      expect(
+        find.text('Nenhuma corrida encontrada com esses filtros.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'list opens current detail and selects distance without creating a record',
+    (tester) async {
+      final paths = <String>[];
+      final gateway = await signed((uri, method, headers, body) async {
+        expect(method, 'GET');
+        paths.add(uri.path);
+        return uri.path == '/editions'
+            ? JsonReply(200, {
+                'items': [entry('A')],
+              })
+            : JsonReply(200, entry('A'));
+      });
+      await tester.pumpWidget(
+        MaterialApp(home: CatalogScreen(gateway: gateway)),
+      );
+      await tester.pumpAndSettle();
+      await reveal(tester, find.text('Corrida A'));
+      await tester.tap(find.text('Corrida A'));
+      await tester.pumpAndSettle();
+      expect(find.text('Detalhes da edição'), findsOneWidget);
+      await tester.tap(find.text('10 km'));
+      await tester.pumpAndSettle();
+      expect(find.text('Distância selecionada.'), findsOneWidget);
+      expect(paths, ['/editions', '/editions/A']);
+    },
+  );
+
+  testWidgets('archived edition remains visible without new selection', (
+    tester,
+  ) async {
+    final gateway = await signed(
+      (uri, method, headers, body) async =>
+          JsonReply(200, entry('old', archived: true)),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditionScreen(gateway: gateway, editionId: 'old'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Edição arquivada:'), findsOneWidget);
+    await tester.tap(find.text('10 km'));
+    await tester.pumpAndSettle();
+    expect(find.text('Distância selecionada.'), findsNothing);
+  });
+
+  testWidgets('selected catalog distance creates and updates a private draft', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    final gateway = await signed((uri, method, headers, body) async {
+      calls.add('$method ${uri.path}');
+      if (method == 'GET') return JsonReply(200, entry('A'));
+      if (method == 'POST') {
+        expect(body, {'editionId': 'A', 'distanceId': '10k'});
+        expect(headers['Idempotency-Key'], isNotEmpty);
+        return const JsonReply(201, {
+          'id': 'draft-1',
+          'editionId': 'A',
+          'distanceId': '10k',
+          'state': 'draft',
+          'version': 1,
+        });
+      }
+      expect(body?['expectedVersion'], 1);
+      expect(body?['timeSeconds'], 3600);
+      return const JsonReply(200, {
+        'id': 'draft-1',
+        'editionId': 'A',
+        'distanceId': '10k',
+        'state': 'draft',
+        'version': 2,
+        'timeSeconds': 3600,
+      });
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditionScreen(gateway: gateway, editionId: 'A'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('10 km'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Criar rascunho'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rascunho da participação'), findsOneWidget);
+    expect(find.textContaining('não gera medalha'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Tempo em segundos (opcional)'),
+      '3600',
+    );
+    await tester.tap(find.text('Salvar rascunho'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rascunho salvo. Nada foi publicado.'), findsOneWidget);
+    expect(calls, [
+      'GET /editions/A',
+      'POST /participations',
+      'PATCH /participations/draft-1',
+    ]);
+  });
+
+  testWidgets(
+    'validated photo and eight ratings complete the draft vertically',
+    (tester) async {
+      final calls = <String>[];
+      Map<String, dynamic>? completion;
+      final gateway = IdentityGateway(
+        cognito: Uri.parse('https://cognito.example'),
+        api: Uri.parse('https://api.example'),
+        clientId: 'synthetic',
+        transport: (uri, method, headers, body) async {
+          if (uri.host == 'cognito.example') {
+            return const JsonReply(200, {
+              'AuthenticationResult': {'AccessToken': 'synthetic'},
+            });
+          }
+          calls.add('$method ${uri.path}');
+          if (uri.path == '/uploads') {
+            return const JsonReply(201, {
+              'uploadId': 'upload-1',
+              'uploadUrl': 'https://private.example/upload-1',
+              'uploadMethod': 'PUT',
+              'uploadHeaders': {'Content-Type': 'image/jpeg'},
+            });
+          }
+          if (uri.path.endsWith('/finalize')) {
+            return const JsonReply(200, {
+              'uploadId': 'upload-1',
+              'state': 'valid',
+              'imageReference': 'img-valid',
+            });
+          }
+          completion = body;
+          return const JsonReply(200, {
+            'id': 'draft-1',
+            'editionId': 'A',
+            'distanceId': '10k',
+            'state': 'completed',
+            'version': 2,
+            'medalImageReference': 'img-valid',
+          });
+        },
+        byteTransport: (uri, method, headers, bytes) async {
+          calls.add('$method signed-object');
+          return 200;
+        },
+      );
+      await gateway.signIn('synthetic@example.test', 'synthetic');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ParticipationDraftScreen(
+            gateway: gateway,
+            initial: const {
+              'id': 'draft-1',
+              'editionId': 'A',
+              'distanceId': '10k',
+              'state': 'draft',
+              'version': 1,
+            },
+            photoSelector: () async => [0xff, 0xd8, 0xff, 0xd9],
+          ),
+        ),
+      );
+      await tester.tap(find.text('Selecionar foto'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Imagem validada para uso na conclusão.'),
+        findsOneWidget,
+      );
+
+      final declaration = find.text('Declaro que concluí esta corrida');
+      await tester.drag(find.byType(ListView), const Offset(0, -1800));
+      await tester.pumpAndSettle();
+      await tester.tap(declaration);
+      await tester.pumpAndSettle();
+      final finish = find.text('Concluir participação');
+      await tester.drag(find.byType(ListView), const Offset(0, -600));
+      await tester.pumpAndSettle();
+      await tester.tap(finish);
+      await tester.pumpAndSettle();
+
+      expect(completion?['declaredCompleted'], true);
+      expect((completion?['ratings'] as Map).length, 8);
+      expect(completion?['medalImageReference'], 'img-valid');
+      expect(find.textContaining('Participação concluída'), findsWidgets);
+      expect(find.text('Salvar rascunho'), findsNothing);
+      expect(find.text('Selecionar foto'), findsNothing);
+      expect(find.textContaining('Privado · não gera medalha'), findsNothing);
+      expect(calls, [
+        'POST /uploads',
+        'PUT signed-object',
+        'POST /uploads/upload-1/finalize',
+        'POST /participations/draft-1/complete',
+      ]);
+    },
+  );
+
+  testWidgets('protected catalog error does not show results', (tester) async {
+    final gateway = await signed(
+      (uri, method, headers, body) async =>
+          const JsonReply(403, {'code': 'BETA_ADMISSION_REQUIRED'}),
+    );
+    await tester.pumpWidget(MaterialApp(home: CatalogScreen(gateway: gateway)));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('É necessário participar do beta para consultar as corridas.'),
+      findsOneWidget,
+    );
+    expect(find.byType(Card), findsNothing);
+  });
+}

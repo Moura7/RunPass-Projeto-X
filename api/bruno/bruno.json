@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "RunPass - APIs locais S02-S03",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

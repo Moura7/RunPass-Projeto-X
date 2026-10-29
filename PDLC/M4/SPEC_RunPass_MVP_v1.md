@@ -1,6 +1,6 @@
 # SPEC — RunPass MVP — referência única
 
-Atualização: 27/10/2026. Estado: **direções prioritárias aprovadas pelo usuário; detalhamento e desenvolvimento incremental autorizados no escopo abaixo**.
+Atualização: 28/10/2026. Estado: **direções prioritárias aprovadas pelo usuário; detalhamento e desenvolvimento incremental autorizados no escopo abaixo**.
 
 Arquivo canônico: **SPEC_RunPass_MVP_v1.md**. Por decisão do usuário, existe uma única SPEC ativa. O conteúdo consolidado foi incorporado neste arquivo; a tentativa de v2 foi incorporada sem manter um segundo arquivo ativo. O registro anterior foi preservado em historico/REGISTRO-TECNICO-ANTERIOR-2026-10-27.md, sem vigência concorrente.
 
@@ -35,7 +35,7 @@ As propostas P01–P09 e dependências B01–B06 abaixo foram preservadas para r
 
 Base: PRD_RunPass_MVP_v2.md, decisões de Grill-me e confirmações posteriores, preservadas no registro histórico, MATRIZ-APROVACOES-M4-RunPass.md e documentos de retenção/eventos. Decisão explícita posterior prevalece sobre uma pendência histórica anterior.
 
-O contrato API-RunPass-v1.openapi.json está em 0.7.0-draft, com 55 caminhos e 71 operações. Sua validação estrutural não comprova implementação. MODELO-DYNAMODB-RunPass-v1.md continua parcial; o desenho candidato desta revisão não o transforma em modelo físico homologado.
+O contrato API-RunPass-v1.openapi.json está em 0.8.0-draft, com 55 caminhos e 72 operações. Sua validação estrutural não comprova implementação. MODELO-DYNAMODB-RunPass-v1.md detalha o desenho físico do fluxo inicial na S01, em revisão. Não é modelo de todo o MVP nem infraestrutura homologada.
 
 Referências complementares: EVENTOS-E-REPLAY-RunPass-MVP.md; DATA-LAKE-AVALIACOES-RunPass-v1.md; RETENCAO-E-EXCLUSAO-RunPass-MVP.md; RETENCAO-DENUNCIAS-E-AUDITORIA-RunPass.md; RETENCAO-TECNICA-RunPass-MVP.md; UPLOAD-ADMINISTRATIVO-MEDALHAS-RunPass.md; FECHAMENTO-TECNICO-RunPass-MVP.md; ORCAMENTO-RunPass-preliminar.md e respectiva simulação.
 
@@ -91,35 +91,15 @@ Separar buckets/prefixos e papéis para originais temporários, imagens tratadas
 
 O histórico de avaliações é uma camada informacional limitada, não plataforma analítica geral. Consulta administrativa mediada por índice de avaliação/período e objetos S3, sem introduzir Athena/Glue/Firehose automaticamente.
 
-## 6. Dados: direção aprovada e desenho candidato — P02
+## 6. Dados: desenho da primeira entrega — S01
 
-A diretriz é agrupar dados relacionados e separar necessidades operacionais diferentes, sem impor single-table para toda a aplicação. Propõem-se seis fronteiras físicas por ambiente, revisáveis antes de CloudFormation. Nomes são ilustrativos, sem recursos criados.
+O desenho físico atual está em MODELO-DYNAMODB-RunPass-v1.md, com evidências e decisões em S01-desenho-e-contratos.md. Ele substitui os candidatos físicos parciais anteriores para o fluxo inicial; não modela todo o social.
 
-| Tabela candidata | Conteúdo relacionado | Acesso principal e motivo |
-| --- | --- | --- |
-| IdentityAccess | Estado da conta, perfil, reserva de username, papéis, admissão/espera | Autorização atual, unicidade e teto transacional; dados privados segregados por tipo de item e IAM |
-| RaceCatalog | Provas, edições, distâncias, organizadores e solicitações | Consultas de catálogo e revisão pela equipe; retenção independente do histórico do corredor |
-| RunHistory | Participação, avaliação, medalha e rascunho | Agrupamento relacionado aprovado, recuperação conjunta e histórico sem TTL |
-| Social | Publicação, comentário, like, follow/block, wishlist e avisos | Relações e enumeração por proprietário/alvo para privacidade e limpeza |
-| Operations | Outbox, entregas, idempotência, jobs, sessões e referência de exclusão | Ciclos de vida técnicos explícitos; pendências recuperáveis, sem TTL genérico |
-| Projections | Contribuição de avaliação, RunScore e feed materializado | Dados derivados reconstruíveis; controle de geração/versão separado da fonte |
+IdentityAccess, RaceCatalog, RunHistory, Operations e Projections cobrem o fluxo inicial. ErasureControl é segregada para o controle mínimo de exclusões aprovado por até 15 dias; Social fica para entrega posterior. Agrupam-se participação/review/medalha por USER/participationId estável, com reserva condicional USER/editionId e lookup por participationId. As tabelas não foram criadas; custos devem ser recalculados antes de provisionar.
 
-Cada tabela usa PK/SK compostas; dados pessoais não entram em nomes de recursos ou chaves externas. Exemplo RunHistory: PK USER#id; SK EDITION#editionId#PARTICIPATION, REVIEW ou MEDAL. Rascunhos têm ID independente. Lookup por participationId aponta ao dono/edição. Não armazenar bytes de imagem no DynamoDB.
+O modelo registra PK/SK, índices esparsos e facets de catálogo, fonte/projeção, matriz rota→consulta/transação, invariantes, eventos e limpeza por titular. Todas as combinações dos filtros de catálogo permanecem disponíveis com paginação limitada por trabalho, sem Scan global. Leitura de índices é revalidada na fonte atual, sem expor resultados ocultos ou rascunhos alheios.
 
-| Acesso | Estratégia candidata | Exigência antes de implementar |
-| --- | --- | --- |
-| Perfil exato e username único | Chave por usuário e reserva condicional de username | Definir normalização e busca por prefixo sem varredura global |
-| Histórico/medalheiro | Partição do usuário e índice por data de conclusão | Paginação e verificação atual de visibilidade |
-| Reviews por edição/distância | GSIs por edição e edição/distância, ordem temporal | Revalidar moderação, medir concentração e tamanho |
-| Catálogo | Itens de índice explícitos por cidade/período e distância; índice de prefixos normalizados de título | Fixar combinações de filtro e medir leituras; não prometer busca arbitrária |
-| Social e limpeza | Arestas por origem e índice inverso por alvo/proprietário | Enumerar referências para exclusão sem scan global |
-| Admissão | Contador/registro de admitido em transação condicional | Concorrência no 50º/1.000º e não reabrir vagas por exclusão |
-| Pendências e expiração | Índice por estado, shard e data; rechecagem na fonte | Leases e consulta paginada; índice atrasado não é fonte de autorização |
-| Feed | Caixa de entrada por leitor com referências mínimas e ordenação em dois grupos | Prova de completude, mudança de follow e custo de fan-out |
-
-Transações podem atravessar tabelas no mesmo ambiente/região, respeitando limites do serviço; isso não dá restauração conjunta automática. Restauração das fontes, controles e imagens exige runbook e reconciliação antes de reabrir tráfego.
-
-**B01:** detalhar PK/SK/GSIs e itens de índice de catálogo/feed, consultas de cada combinação do OpenAPI, e a distribuição de carga. P02 é proposta de fronteiras, não prova de que todos os acessos estão resolvidos. Comparar fan-out do feed com alternativa de consultas limitadas antes de fixar a implementação. O usuário não precisa aprovar cada nome de atributo.
+**B01:** desenho do fluxo inicial preparado na S01; comprovar consultas, geração de índice, concorrência e distribuição nos slices de implementação. Feed completo permanece dependência de sua própria entrega. Eficiência/custo não são medidos por documentação.
 
 ## 7. Integridade, transações e eventos
 
@@ -139,7 +119,7 @@ Cada consumidor registra versão/contribuição com escrita condicional e, quand
 
 Replay de concluídos por até sete dias — A; propõe-se contar desde a última confirmação obrigatória, sem renovar por replay. Pendências permanecem recuperáveis, respeitando exclusões e expiração específica. Reconstruções mais antigas usam fontes atuais. Operação interna registra ator, motivo, seleção e resultado.
 
-**B02:** fixar janela efetiva dos controles de deduplicação e exclusões após definir replay/restauração/transporte. Não assumir que TTL de sete dias cobre entregas em curso ou dados restaurados. Não impor retenção pessoal maior para simplificar controles. Após replay vencer, recusar execução histórica e orientar reconstrução; nunca recriar conteúdo excluído.
+**B02:** desenho S01 fixa replay desde allConfirmedAt, transporte de um dia, ledger ligado à outbox viva e contribuição versionada vigente; controle mínimo de exclusão por até 15 dias aprovado como exceção segregada. Implementar e comprovar em S07–S09; TTL não substitui expiração lógica ou limpeza. Reconstrução usa fontes atuais e nunca recria conteúdo excluído.
 
 ## 8. Identidade e autorização
 
@@ -155,7 +135,7 @@ Cognito segregado por ambiente e pools distintos para corredores e operadores; T
 
 Bootstrap de operador por procedimento restrito de infraestrutura, sem cadastro público. Recuperação de MFA exige verificação e trilha operacional; não oferecer bypass por endpoint público. Propor ao menos dois operadores recuperáveis antes de PROD para evitar dependência de uma pessoa. Matriz de consulta de auditoria e replay usa permissões específicas.
 
-**B03:** detalhar evidência confiável do fluxo MFA, recuperação, revogação e identidade dos responsáveis pelo bootstrap. Validar o plano Cognito escolhido e o custo, sem tratar a hipótese Lite do orçamento como aprovação. Política IAM e segredos não são criados por este documento.
+**B03:** S01 descreve attestation de conclusão TOTP para token exato, bootstrap, recuperação e revogação. Implementar/verificar protocolo e nomear responsáveis antes de ativar administração real. Validar o plano Cognito escolhido e o custo, sem tratar a hipótese Lite do orçamento como aprovação. Política IAM e segredos não são criados por este documento.
 
 ## 9. Imagens e painel
 
@@ -167,7 +147,7 @@ Sessões administrativas vinculam edição/distância e ambiente. Upload não pu
 
 ### 9.2 Propostas — P05
 
-Converter HEIC no dispositivo para formato aceito antes do envio, com teste em iPhone real. Se conversão falhar, informar e preservar rascunho; não declarar suporte HEIC servidor. Limitar decodificação a 25 megapixels por imagem como proteção inicial proposta, com UX de redução local; validar fotos típicas antes de fixar. Downloads autorizados por URL de cinco minutos e sem cache público de conteúdo ocultável; validade residual deve constar no teste/experiência, sem promessa de revogação instantânea de URL já emitida.
+Converter HEIC no dispositivo para formato aceito antes do envio, com teste em iPhone real. Se conversão falhar, informar e preservar rascunho; não declarar suporte HEIC servidor. A S01 fixa proteção inicial de 25 megapixels por imagem e sessão de recebimento de 15 minutos, com UX de redução local; validar fotos típicas nos slices de imagem antes de liberação. Downloads autorizados por URL de cinco minutos e sem cache público de conteúdo ocultável; validade residual deve constar no teste/experiência, sem promessa de revogação instantânea de URL já emitida.
 
 Painel Flutter Web como proposta técnica, hospedagem estática privada na operação de administração ou pública apenas para o shell sem dados, com backend protegido. Escolher hospedagem após prova de login/MFA, formulários, uploads e acessibilidade; não acrescentar um site público de corredores.
 
@@ -179,6 +159,7 @@ Painel Flutter Web como proposta técnica, hospedagem estática privada na opera
 | --- | --- |
 | Histórico ativo | A: sem TTL; exclusão pelos fluxos previstos |
 | Conta excluída | A: bloqueio/ocultação imediatos; remover dados pessoais ativos em até sete dias, inclusive lake |
+| Controle mínimo de exclusão | A em 28/10: segregado/pseudonimizado, apenas recuperação, por até 15 dias desde aceitação; exceção específica, sem estender demais dados |
 | Lake de avaliações | A: 60 dias desde ocorrência original, sem renovação por replay; exclusão de conta prevalece |
 | Recuperação | A: sete dias no beta, independente dos dados ativos; reaplicar exclusões na restauração |
 | Denúncia aberta | A: enquanto necessária, revisão semanal; não deixar sem acompanhamento indefinidamente |
@@ -192,13 +173,13 @@ Painel Flutter Web como proposta técnica, hospedagem estática privada na opera
 
 **P06:** bloquear consulta de lake/denúncia/auditoria no vencimento e remover cópias operacionais elegíveis em até 24 horas depois. Auditoria de avaliação ainda pendente ao vencer deve ter payload pessoal descartado com registro mínimo de expiração/falha, sem falsa confirmação de entrega. Evento operacional de score continua independente.
 
-**B05:** definir controle mínimo de exclusões e retenções restantes de rascunhos, espera, solicitações e feedbacks; política de nascimento; comprovar que logs e filas permitem cumprir exclusão pessoal. Não armazenar dados indefinidamente sob pretexto de pendência, backup ou auditoria. Backups não são prometidos como removidos em 24 horas; versões e cópias são inventariadas.
+**B05:** controle mínimo de exclusões aprovado por até 15 dias e desenhado na S01, com comprovação de recuperação/descarte pendente. Definir retenções restantes de rascunhos, espera, solicitações e feedbacks; política de nascimento; comprovar que logs e filas permitem cumprir exclusão pessoal. Não armazenar dados indefinidamente sob pretexto de pendência, backup ou auditoria. Backups não são prometidos como removidos em 24 horas; versões e cópias são inventariadas.
 
 ## 11. Contratos e testes
 
 ### 11.1 Contrato HTTP
 
-OpenAPI 0.7.0-draft cobre conta/beta, perfis, catálogo, participação/review, uploads comuns e administrativos, social, wishlist, notices, solicitações, moderação e administração. PUT de review é substituição; PATCH é alteração parcial; DELETE aceita remoção e não afirma limpeza de todas as cópias. Cognito tem fluxo de login próprio, não endpoints fictícios no backend.
+OpenAPI 0.8.0-draft cobre conta/beta, perfis, catálogo, participação/review, uploads comuns e administrativos, social, wishlist, notices, solicitações, moderação e administração. PUT de review é substituição; PATCH é alteração parcial; DELETE aceita remoção e não afirma limpeza de todas as cópias. Cognito tem fluxo de login próprio, não endpoints fictícios no backend.
 
 Erros, idempotência, versão, parâmetros e schemas existentes são a base de revisão. **P07:** aprovar a linha de base contratual condicionada a revisão por jornada; ajustes incompatíveis exigem versão/migração. Limites de texto e paginação devem ser fixados no contrato antes de gerar cliente definitivo. Não interpretar extensões x-required-role/x-requires-mfa como segurança executável.
 
@@ -260,3 +241,33 @@ Registro de aprovação: usuário respondeu **“Aprovado! vamos utilizar uma ú
 ## Plano da primeira entrega preparado
 
 implementation-slices.md detalha S00–S09 para o fluxo aprovado: preparação local/contexto/harness, desenho de dados e contratos, identidade/admissão, catálogo, rascunho, imagem, conclusão/avaliação/medalha, consumidores/RunScore/histórico restrito, edição/exclusão e integração real em DEV. Cada slice tem dependências e critérios de aceite. S00 pode iniciar; os seguintes dependem das saídas anteriores. Provisionamento DEV depende de orçamento e autorização; release PROD/beta não é autorizado por esse plano. Não há implementação/testes de execução concluídos nem nova SPEC criada.
+## S01 — desenho e contrato preparados
+
+Em 28/10/2026, por solicitação do usuário, detalhados modelo físico e contratos do fluxo inicial. PUT /me fecha o bootstrap pré-admissão; limites de username/comentário/página/imagem e estados de upload foram explicitados. S01-desenho-e-contratos.md registra decisões, fontes primárias, matriz de falhas e verificações. Desenho em revisão, sem API/AWS executada; não constitui aprovação integral da SPEC ou liberação. S02 pode avançar localmente conforme as dependências registradas. A aprovação específica do controle de exclusão por até 15 dias não aprova automaticamente outras propostas de retenção.
+
+
+## Aceite da revisão S01 — 28/10/2026
+
+Usuário concordou com os três blocos revisados sequencialmente: perfil/cadastro, catálogo/avaliações e fotos/falhas. Último bloco confirma conversão HEIC e redução de resolução no mobile, sessão de 15 minutos, imagem validada antes da conclusão e preservação do rascunho em falha/timeout de processamento (15 minutos após finalize). Meta pós-upload de cinco segundos mantida, sujeita a testes. S01 aceita no escopo do desenho revisado; próximo slice S02 local. Detalhes e evidências em S01-desenho-e-contratos.md. Não comprova implementação ou testes reais, não dispensa dependências dos slices seguintes e não autoriza recursos pagos, deploy ou beta.
+
+
+## S02 — implementação local em revisão, 28/10/2026
+
+Usuário autorizou seguir para S02. Implementadas nove operações HTTP de perfil/admissão/espera, validação JWT/Cognito, idade/teto/marco do beta, idempotência, bloqueio imediato da conta e job durável de exclusão. Mobile tem cadastro/confirmação/login/recuperação/perfil/admissão/espera com token em memória. Adaptador local e DynamoDB explícito, sessão de operadores ligada ao desafio TOTP e template CloudFormation de identidade preparado sem aplicar. Evidências/limites: S02-identidade-admissao.md. Testes locais não comprovam AWS, MFA real ou aparelhos; worker de limpeza e integração permanecem S08/S09. S02 em revisão, sem aceite humano, provisionamento, deploy, commit ou push. Próximo slice técnico: S03 catálogo.
+
+
+## S03 — catálogo local em revisão, 28/10/2026
+
+Após liberar espaço do Mac e solicitar retomada, implementadas GET /editions e GET /editions/{id}, filtros combináveis/cursor cifrado, carga interna em gerações com MFA/papel atual, auditoria e referências de imagem validadas. Seed sintético idempotente em memória e telas Flutter de catálogo/detalhe/seleção. S03-catalogo.md registra resultados e limites; OpenAPI 0.8.0-draft preservado. Demonstração debug separada sem rede preparada para teste visual no simulador, sem afirmar autenticação real ou integração de backend. Usuário autorizou reinstalar runtime iOS 27.1 após falha de inicialização; resultado nativo depende de evidência no relatório. Sem aceite humano, AWS, deploy, commit ou push. Próximo slice: S04 rascunho.
+
+## S04 — rascunho local em revisão, 28/10/2026
+
+Após o usuário solicitar continuidade das slices, foram implementadas criação, leitura, listagem e alteração de rascunho privado, com reserva única por usuário/edição, idempotência, versão esperada, validação de edição/distância e integração Flutter a partir do catálogo. A entrega não gera review, medalha, RunScore, outbox ou publicação. Evidências e limitações: S04-rascunho-participacao.md. Sem AWS, deploy, commit ou push. Próximo slice técnico: S05 imagem.
+
+## S05 — imagem local em execução, 29/10/2026
+
+Implementados localmente sessão/finalização/estado de upload privado, fixação da versão do objeto, autorização do titular, validação JPEG/PNG, limite de 25 megapixels, orientação, remoção de metadados, otimização e falha fechada. O Flutter seleciona e reduz fotos, valida assinatura/tamanho, envia pela URL autorizada e só então finaliza; falhas preservam o rascunho. Evidências: 63 testes backend, 14 testes Flutter, análise estática e compilação no simulador. Conversão HEIC exige iPhone real; S3/IAM e latência pertencem à integração DEV autorizada no S09. Detalhes em S05-upload-imagem.md. Sem AWS, deploy, commit ou push.
+
+## S06 — conclusão local em revisão, 29/10/2026
+
+Implementada conclusão transacional local do rascunho com autodeclaração, oito notas, imagem válida, review, medalha com referência/versionamento fixos, claim, outbox e idempotência. Concorrência produz um único vencedor e falhas de imagem/edição preservam o rascunho. O teste Flutter vertical percorre upload sintético, validação, oito notas e conclusão. Evidências: 66 testes backend, 15 Flutter e análise limpa; limites em S06-conclusao-avaliacao-medalha.md. Consumidores/RunScore são S07; integração real é S09. Sem AWS, deploy, commit ou push.

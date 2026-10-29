@@ -1,0 +1,21 @@
+meta {
+  name: 03 - Perfil proprio
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/me
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{newRunnerToken}}
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

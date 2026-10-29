@@ -424,3 +424,37 @@ O usuário aprovou DynamoDB on-demand com agrupamento relacionado, outbox transa
 ## Plano da primeira entrega preparado
 
 implementation-slices.md detalha S00–S09 para o fluxo aprovado: preparação local/contexto/harness, desenho de dados e contratos, identidade/admissão, catálogo, rascunho, imagem, conclusão/avaliação/medalha, consumidores/RunScore/histórico restrito, edição/exclusão e integração real em DEV. Cada slice tem dependências e critérios de aceite. S00 pode iniciar; os seguintes dependem das saídas anteriores. Provisionamento DEV depende de orçamento e autorização; release PROD/beta não é autorizado por esse plano. Não há implementação/testes de execução concluídos nem nova SPEC criada.
+
+## S00 preparada — 28/10/2026
+
+Por solicitação do usuário, preparada a estrutura local backend/mobile/infra, AGENTS.md, guia de desenvolvimento, ambiente Python com dependências fixadas e scaffold Flutter Android/iOS. Ruff, contrato OpenAPI com 12 exemplos e análise/formatação Flutter passaram; dependências mobile verificadas com lockfile. Evidências e limites em PDLC/M4/S00-preparacao-local.md; slice em revisão, sem aceite humano registrado. Ainda não há jornadas de produto, API, infraestrutura AWS ou execução em aparelho. Próximo passo técnico: S01, desenho físico e contratos do fluxo inicial. Sem deploy, commit ou push.
+
+
+## S01 — desenho e contratos, 28/10/2026
+
+Usuário autorizou seguir para S01 após S00. Modelo físico do fluxo inicial detalhado no arquivo existente MODELO-DYNAMODB-RunPass-v1.md; OpenAPI 0.8.0-draft acrescenta bootstrap PUT /me e explicita limites/estados de upload e histórico público. Revisão e dependências em S01-desenho-e-contratos.md. Usuário aprovou especificamente controle mínimo segregado de exclusões, pseudonimizado, somente recuperação, por até 15 dias desde aceitação; exceção não estende prazo de sete dias dos demais dados pessoais. Desenho em revisão, sem implementação de API/AWS ou aceite de produção. Próximo slice: S02 local de identidade/admissão; descarte de auditoria pendente ao vencer permanece dependência do caminho afetado em S07.
+
+
+## Revisão S01 — perfil aprovado, 28/10/2026
+
+Usuário concordou com o bloco de perfil/cadastro da S01: nome obrigatório até 80 caracteres, username único ASCII 3–30 normalizado em minúsculas, cidade opcional até 100, bio opcional até 500 e número de peito opcional até 40/privado. Nome e username antes da admissão; criar perfil não concede acesso às corridas/social. Revisão dos demais blocos permanece em andamento, sem aprovação integral inferida. Evidência em S01-desenho-e-contratos.md.
+
+
+## Revisão S01 — catálogo e avaliações aprovados, 28/10/2026
+
+O usuário respondeu “concordo” ao bloco apresentado: combinar cidade, estado, distância, período e início do nome na busca; ignorar acentos e caixa na comparação do nome; ordenar por data crescente, ou alfabeticamente na busca apenas por nome; carregar 20 resultados por vez com continuação; comentário de avaliação opcional até 2.000 caracteres, com aviso de excesso e sem truncamento. Oito notas e RunScore por edição permanecem conforme aprovação anterior. Bloco aprovado, sem inferir aceite do bloco de fotos/falhas ou da S01 integral.
+
+
+## Aceite da revisão S01 — 28/10/2026
+
+Usuário concordou com os três blocos revisados sequencialmente: perfil/cadastro, catálogo/avaliações e fotos/falhas. Último bloco confirma conversão HEIC e redução de resolução no mobile, sessão de 15 minutos, imagem validada antes da conclusão e preservação do rascunho em falha/timeout de processamento (15 minutos após finalize). Meta pós-upload de cinco segundos mantida, sujeita a testes. S01 aceita no escopo do desenho revisado; próximo slice S02 local. Detalhes e evidências em S01-desenho-e-contratos.md. Não comprova implementação ou testes reais, não dispensa dependências dos slices seguintes e não autoriza recursos pagos, deploy ou beta.
+
+
+## S02 — implementação local em revisão, 28/10/2026
+
+Usuário autorizou seguir para S02. Implementadas nove operações HTTP de perfil/admissão/espera, validação JWT/Cognito, idade/teto/marco do beta, idempotência, bloqueio imediato da conta e job durável de exclusão. Mobile tem cadastro/confirmação/login/recuperação/perfil/admissão/espera com token em memória. Adaptador local e DynamoDB explícito, sessão de operadores ligada ao desafio TOTP e template CloudFormation de identidade preparado sem aplicar. Evidências/limites: S02-identidade-admissao.md. Testes locais não comprovam AWS, MFA real ou aparelhos; worker de limpeza e integração permanecem S08/S09. S02 em revisão, sem aceite humano, provisionamento, deploy, commit ou push. Próximo slice técnico: S03 catálogo.
+
+
+## S03 — catálogo local em revisão, 28/10/2026
+
+Após liberar espaço do Mac e solicitar retomada, implementadas GET /editions e GET /editions/{id}, filtros combináveis/cursor cifrado, carga interna em gerações com MFA/papel atual, auditoria e referências de imagem validadas. Seed sintético idempotente em memória e telas Flutter de catálogo/detalhe/seleção. S03-catalogo.md registra resultados e limites; OpenAPI 0.8.0-draft preservado. Demonstração debug separada sem rede preparada para teste visual no simulador, sem afirmar autenticação real ou integração de backend. Usuário autorizou reinstalar runtime iOS 27.1 após falha de inicialização; resultado nativo depende de evidência no relatório. Sem aceite humano, AWS, deploy, commit ou push. Próximo slice: S04 rascunho.

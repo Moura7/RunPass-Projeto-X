@@ -1,0 +1,5 @@
+-r PDLC/M4/requirements-openapi-validation.txt
+ruff==0.14.2
+-r backend/requirements.in
+httpx==0.28.1
+cfn-lint==1.59.0

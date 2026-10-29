@@ -1,8 +1,8 @@
 # RunPass — Slices de implementação da primeira entrega
 
-Data: 27/10/2026. Fonte única: SPEC_RunPass_MVP_v1.md. Escopo aprovado: autenticação → catálogo → rascunho → imagem → conclusão → avaliação e medalha.
+Data: 29/10/2026. Fonte única: SPEC_RunPass_MVP_v1.md. Escopo aprovado: autenticação → catálogo → rascunho → imagem → conclusão → avaliação e medalha.
 
-Estado do plano: preparado a partir das direções aprovadas; não comprova implementação ou testes. Cada slice possui dependências e saída verificável. Nenhum slice é marcado como concluído. Propostas técnicas são resolvidas dentro dos slices de desenho; não exigem reaprovação de nomes de atributos. Escolhas que alterem produto, custo ou privacidade voltam ao usuário.
+Estado do plano: S00 preparada/verificada e sequência S01 autorizada pelo usuário. S01 aceita pelo usuário após revisão dos três blocos conforme S01-desenho-e-contratos.md; S02, S03 e S04 implementadas localmente em revisão. S05 e S06 estão em execução local; S07–S09 não foram iniciados. Cada slice possui dependências e saída verificável. Propostas técnicas são resolvidas dentro dos slices de desenho; não exigem reaprovação de nomes de atributos. Escolhas que alterem produto, custo ou privacidade voltam ao usuário.
 
 ## Regras de execução
 
@@ -16,13 +16,13 @@ Estado do plano: preparado a partir das direções aprovadas; não comprova impl
 
 | ID | Resultado | Dependências | Estado |
 | --- | --- | --- | --- |
-| S00 | Contexto, estrutura e verificações locais | SPEC prioritária aprovada | Pronto para iniciar preparação |
-| S01 | Desenho físico do fluxo inicial e contratos fechados | S00 | Aguardando desenho/revisão |
-| S02 | Identidade, admissão e autorização | S01 | Aguardando dependências |
-| S03 | Catálogo consultável e carga controlada | S01, S02 | Aguardando dependências |
-| S04 | Participação em rascunho | S03 | Aguardando dependências |
-| S05 | Upload e imagem validada | S02, S04 | Aguardando dependências |
-| S06 | Conclusão atômica, avaliação e medalha | S04, S05 | Aguardando dependências |
+| S00 | Contexto, estrutura e verificações locais | SPEC prioritária aprovada | Verificada; usuário autorizou sequência S01 |
+| S01 | Desenho físico do fluxo inicial e contratos fechados | S00 | Aceito pelo usuário em 28/10/2026 — revisão dos três blocos |
+| S02 | Identidade, admissão e autorização | S01 | Em revisão — implementação local e evidências em S02-identidade-admissao.md |
+| S03 | Catálogo consultável e carga controlada | S01, S02 | Em revisão — S03-catalogo.md |
+| S04 | Participação em rascunho | S03 | Em revisão — S04-rascunho-participacao.md |
+| S05 | Upload e imagem validada | S02, S04 | Em execução — backend/mobile locais validados; iPhone real e S3 pendentes |
+| S06 | Conclusão atômica, avaliação e medalha | S04, S05 | Em revisão — backend e jornada mobile locais validados |
 | S07 | Entrega de eventos, RunScore e histórico restrito | S06 | Aguardando dependências |
 | S08 | Edição, exclusão e proteção de dados | S06, S07 | Aguardando dependências |
 | S09 | Integração real em DEV e aceite da entrega | S02–S08, orçamento/autorização | Bloqueado para provisionamento |
@@ -121,4 +121,32 @@ Feed completo, follow/block/comentários/likes, wishlist e avisos completos, pai
 
 ## Acompanhamento
 
-Atualizar estado por evidência: planejado → pronto (dependências resolvidas) → em execução → em revisão → aceito. Registrar por slice referência da mudança, verificações, resultados, decisão do revisor e pendências. Não há tickets externos publicados, código entregue, infraestrutura provisionada ou commit/push por criação deste plano.
+Atualizar estado por evidência: planejado → pronto (dependências resolvidas) → em execução → em revisão → aceito. Registrar por slice referência da mudança, verificações, resultados, decisão do revisor e pendências. A S00 possui scaffold e verificações locais, conforme seu relatório. Não há infraestrutura provisionada, tickets externos publicados ou commit/push por esta execução.
+
+## Evidência S01 — 28/10/2026
+
+Desenho em MODELO-DYNAMODB-RunPass-v1.md; contrato 0.8.0-draft e revisão em S01-desenho-e-contratos.md. Controle mínimo de exclusão por até 15 dias aprovado explicitamente pelo usuário. Nenhuma aprovação de infraestrutura/custo/release decorre da S01. Pendência de descarte do payload de auditoria ao vencer deve ser resolvida antes do caminho afetado em S07.
+
+
+## Evidência S02 — 28/10/2026
+
+Backend e mobile implementados localmente para identidade/perfil/admissão/espera, com adaptadores explícitos, JWT, controle de operadores e template Cognito não aplicado. Relatório: S02-identidade-admissao.md. Não confundir testes locais/stubs com AWS real; limpeza física/S08, operação e integração/S09 continuam pendentes. Sem aceite humano ou autorização de provisionamento.
+
+
+## Evidência S03 — 28/10/2026
+
+Catálogo implementado localmente com autorização de admissão, filtros/paginação, versão ativa, carga idempotente/retomável, auditoria restrita e interface de busca/detalhe/seleção. Seed em memória e demonstração debug sem AWS preparados. Relatório S03-catalogo.md distingue testes locais e execução do simulador. Não comprova catálogo real, imagens processadas, AWS ou conclusão de participação. S04 continua próximo slice; sem aceite humano inferido ou autorização de infraestrutura.
+
+## Evidência S04 — 28/10/2026
+
+Rascunho privado implementado localmente com reserva única por usuário/edição, idempotência, versão esperada, autorização do titular, revalidação de catálogo, listagem paginada e integração da seleção no Flutter. Relatório: S04-rascunho-participacao.md. Não cria review, medalha, score, evento ou publicação; solicitação de prova ausente continua fora deste caminho. Sem AWS, deploy, commit, push ou aceite humano inferido. Próximo slice: S05.
+
+Revalidação em 29/10/2026: 28 testes focados de participação/catálogo e a suíte completa de 63 testes backend passaram. Os 13 testes Flutter, análise estática e formatação também passaram. O estado permanece em revisão até aceite humano; execução local não comprova DynamoDB/Cognito reais.
+
+## Evidência S05 — 29/10/2026
+
+Backend local em execução com sessão privada de 15 minutos, finalização idempotente, versão do objeto fixada, autorização antes da consulta ao blob, estados pending/valid/failed, prazo de processamento e referência derivada imutável. Validação real decodifica JPEG/PNG, confere formato/tamanho declarado, limita 25 megapixels, corrige orientação, remove metadados e otimiza com meta de 1 MB. Seis testes específicos passaram, incluindo sobrescrita posterior, titularidade, expiração, timeout, bytes inválidos e limite de pixels. O Flutter seleciona/reduz a foto, verifica assinatura/tamanho, envia bytes pela URL assinada e finaliza depois; a suíte passou com 14 testes e análise limpa. Relatório: S05-upload-imagem.md. Conversão HEIC em iPhone real, adaptador S3 e medição de cinco segundos continuam pendentes; não há autorização de AWS.
+
+## Evidência S06 — 29/10/2026
+
+Conclusão local em revisão com uma única transação otimista para participação, claim, review, medalha, referência da imagem, evento durável e comando idempotente. O backend exige autodeclaração, oito notas, versão do rascunho, edição passada/não arquivada e imagem própria ou oficial válida; retry não duplica efeitos e concorrência tem um vencedor. O teste mobile vertical percorre upload sintético, imagem válida, oito notas, declaração e conclusão. Resultado: 66 testes backend e 15 Flutter, com análise estática limpa. Relatório: S06-conclusao-avaliacao-medalha.md. Integração real continua S09; sem AWS ou publicação de feed.

@@ -1,0 +1,32 @@
+meta {
+  name: 13 - Criar rascunho
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/participations
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{runnerToken}}
+  Content-Type: application/json
+  Idempotency-Key: bruno-local-13
+}
+
+body:json {
+  {
+    "editionId": "synthetic-sp-2024",
+    "distanceId": "10k",
+    "timeSeconds": 3600,
+    "bibNumber": "LOCAL-13"
+  }
+}
+
+tests {
+  test("HTTP 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+}

@@ -1,0 +1,30 @@
+meta {
+  name: 09 - Rejeitar versao antiga
+  type: http
+  seq: 9
+}
+
+patch {
+  url: {{baseUrl}}/me
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{newRunnerToken}}
+  Content-Type: application/json
+  Idempotency-Key: bruno-local-9
+}
+
+body:json {
+  {
+    "expectedVersion": 1,
+    "bio": "Conflito esperado"
+  }
+}
+
+tests {
+  test("HTTP 409", function () {
+    expect(res.getStatus()).to.equal(409);
+  });
+}

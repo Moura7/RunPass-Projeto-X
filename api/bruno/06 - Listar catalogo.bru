@@ -1,0 +1,21 @@
+meta {
+  name: 06 - Listar catalogo
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/editions
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{runnerToken}}
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

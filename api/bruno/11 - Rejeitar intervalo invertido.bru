@@ -1,0 +1,21 @@
+meta {
+  name: 11 - Rejeitar intervalo invertido
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/editions?dateFrom=2027-01-01&dateTo=2026-01-01
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{runnerToken}}
+}
+
+tests {
+  test("HTTP 422", function () {
+    expect(res.getStatus()).to.equal(422);
+  });
+}

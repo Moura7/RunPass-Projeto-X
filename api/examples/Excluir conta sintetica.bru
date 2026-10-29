@@ -1,0 +1,16 @@
+meta {
+  name: Excluir conta sintetica (opcional)
+  type: http
+  seq: 99
+}
+
+delete {
+  url: {{baseUrl}}/me
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{newRunnerToken}}
+  Idempotency-Key: bruno-local-delete
+}

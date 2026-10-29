@@ -1,0 +1,21 @@
+meta {
+  name: 07 - Filtrar catalogo
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/editions?city=Sao%20Paulo&state=SP&distanceKm=10&limit=1
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{runnerToken}}
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

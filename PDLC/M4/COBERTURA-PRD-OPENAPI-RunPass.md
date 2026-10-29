@@ -2,7 +2,11 @@
 
 **Data:** 27/10/2026. **Contrato:** 0.6.1-draft. Revisão documental, sem API implementada. Contrato semanticamente válido não significa produto completo, autorização segura ou desempenho comprovado.
 
-## Matriz de cobertura
+## Atualização S01 — 28/10/2026
+
+Contrato atual: 0.8.0-draft, 55 caminhos e 72 operações. Bootstrap PUT /me acrescentado, GET próprio e exclusão disponíveis sem admissão; limites de perfil/avaliação/catálogo, fonte exclusiva de rascunho e estados de upload pessoal explicitados. Histórico público usa schema próprio sem drafts, bib ou solicitação privada. Plano físico do fluxo inicial e todas as combinações do catálogo em MODELO-DYNAMODB-RunPass-v1.md; evidências e dependências em S01-desenho-e-contratos.md. A matriz abaixo é a revisão histórica: pendências de modelagem/limites do fluxo inicial foram detalhadas pela S01, mas implementação e prova de autorização/desempenho continuam pendentes.
+
+## Matriz de cobertura histórica
 
 | Requisito | Contrato/local responsável | Situação |
 | --- | --- | --- |

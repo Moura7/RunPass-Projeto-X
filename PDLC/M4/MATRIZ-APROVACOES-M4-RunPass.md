@@ -69,3 +69,13 @@ EVENTOS-E-REPLAY-RunPass-MVP.md distingue a política aprovada dos mecanismos pr
 ## Aprovação prioritária e SPEC única
 
 O usuário aprovou DynamoDB on-demand com agrupamento relacionado, outbox transacional/SQS e consumidores versionados/idempotentes, Cognito separado para corredores/operadores com MFA por aplicativo autenticador e autorização por função. Autorizado detalhamento e desenvolvimento incremental do fluxo autenticação → catálogo → rascunho → imagem → conclusão → avaliação e medalha. Referência única: SPEC_RunPass_MVP_v1.md, que recebeu o conteúdo consolidado; Não é mantida uma segunda SPEC ativa. Registro técnico anterior preservado em PDLC/M4/historico, sem vigência. Não exigir aprovação isolada de cada atributo nem nova rodada P01–P09; dependências técnicas devem ser fechadas antes da parte afetada. Não autoriza custo, deploy ou beta sem requisitos/evidências próprios.
+
+
+## Aprovação específica S01 — 28/10/2026
+
+Pergunta explícita apresentou controle mínimo de exclusão por até 15 dias, segregado, acessível somente à recuperação, com identificador pseudonimizado e datas, sem nome/e-mail/fotos/avaliações, como exceção específica ao prazo de sete dias. Resposta do usuário: “Aprovar o controle por até 15 dias”. Requisito aprovado, registrado na SPEC única e no modelo existente. Implementação, validação e operação continuam pendentes; os demais dados pessoais ativos mantêm exclusão em até sete dias. Não estende retenções nem aprova custo/deploy.
+
+
+## Aceite da revisão S01 — 28/10/2026
+
+Usuário concordou com os três blocos revisados sequencialmente: perfil/cadastro, catálogo/avaliações e fotos/falhas. Último bloco confirma conversão HEIC e redução de resolução no mobile, sessão de 15 minutos, imagem validada antes da conclusão e preservação do rascunho em falha/timeout de processamento (15 minutos após finalize). Meta pós-upload de cinco segundos mantida, sujeita a testes. S01 aceita no escopo do desenho revisado; próximo slice S02 local. Detalhes e evidências em S01-desenho-e-contratos.md. Não comprova implementação ou testes reais, não dispensa dependências dos slices seguintes e não autoriza recursos pagos, deploy ou beta.

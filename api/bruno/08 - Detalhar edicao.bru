@@ -1,0 +1,21 @@
+meta {
+  name: 08 - Detalhar edicao
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/editions/synthetic-sp-2024
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{runnerToken}}
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

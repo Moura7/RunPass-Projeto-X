@@ -1,0 +1,188 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "RunPass S02 identity candidate; NOT deployed. MFA evidence still enforced in API.",
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "AllowedValues": [
+        "dev",
+        "prod"
+      ]
+    }
+  },
+  "Resources": {
+    "RunnerPool": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "UserPoolName": {
+          "Fn::Sub": "runpass-${Environment}-runner"
+        },
+        "UsernameAttributes": [
+          "email"
+        ],
+        "UsernameConfiguration": {
+          "CaseSensitive": false
+        },
+        "AutoVerifiedAttributes": [
+          "email"
+        ],
+        "AdminCreateUserConfig": {
+          "AllowAdminCreateUserOnly": false
+        },
+        "MfaConfiguration": "OFF",
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 12,
+            "RequireLowercase": true,
+            "RequireUppercase": true,
+            "RequireNumbers": true,
+            "RequireSymbols": true
+          }
+        },
+        "AccountRecoverySetting": {
+          "RecoveryMechanisms": [
+            {
+              "Name": "verified_email",
+              "Priority": 1
+            }
+          ]
+        },
+        "UserAttributeUpdateSettings": {
+          "AttributesRequireVerificationBeforeUpdate": [
+            "email"
+          ]
+        }
+      }
+    },
+    "RunnerClient": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Properties": {
+        "UserPoolId": {
+          "Ref": "RunnerPool"
+        },
+        "GenerateSecret": false,
+        "PreventUserExistenceErrors": "ENABLED",
+        "EnableTokenRevocation": true,
+        "ExplicitAuthFlows": [
+          "ALLOW_USER_PASSWORD_AUTH",
+          "ALLOW_REFRESH_TOKEN_AUTH"
+        ],
+        "AccessTokenValidity": 60,
+        "IdTokenValidity": 60,
+        "RefreshTokenValidity": 30,
+        "TokenValidityUnits": {
+          "AccessToken": "minutes",
+          "IdToken": "minutes",
+          "RefreshToken": "days"
+        },
+        "ReadAttributes": [
+          "email",
+          "email_verified",
+          "sub"
+        ],
+        "WriteAttributes": [
+          "email"
+        ]
+      }
+    },
+    "OperatorPool": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "UserPoolName": {
+          "Fn::Sub": "runpass-${Environment}-operator"
+        },
+        "UsernameAttributes": [
+          "email"
+        ],
+        "UsernameConfiguration": {
+          "CaseSensitive": false
+        },
+        "AutoVerifiedAttributes": [
+          "email"
+        ],
+        "AdminCreateUserConfig": {
+          "AllowAdminCreateUserOnly": true
+        },
+        "MfaConfiguration": "ON",
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 12,
+            "RequireLowercase": true,
+            "RequireUppercase": true,
+            "RequireNumbers": true,
+            "RequireSymbols": true
+          }
+        },
+        "AccountRecoverySetting": {
+          "RecoveryMechanisms": [
+            {
+              "Name": "admin_only",
+              "Priority": 1
+            }
+          ]
+        },
+        "EnabledMfas": [
+          "SOFTWARE_TOKEN_MFA"
+        ],
+        "UserAttributeUpdateSettings": {
+          "AttributesRequireVerificationBeforeUpdate": [
+            "email"
+          ]
+        }
+      }
+    },
+    "OperatorClient": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Properties": {
+        "UserPoolId": {
+          "Ref": "OperatorPool"
+        },
+        "GenerateSecret": false,
+        "PreventUserExistenceErrors": "ENABLED",
+        "EnableTokenRevocation": true,
+        "ExplicitAuthFlows": [
+          "ALLOW_USER_PASSWORD_AUTH",
+          "ALLOW_REFRESH_TOKEN_AUTH"
+        ],
+        "AccessTokenValidity": 60,
+        "IdTokenValidity": 60,
+        "RefreshTokenValidity": 1,
+        "TokenValidityUnits": {
+          "AccessToken": "minutes",
+          "IdToken": "minutes",
+          "RefreshToken": "days"
+        },
+        "ReadAttributes": [
+          "email",
+          "email_verified",
+          "sub"
+        ],
+        "WriteAttributes": [
+          "email"
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "RunnerPool": {
+      "Value": {
+        "Ref": "RunnerPool"
+      }
+    },
+    "RunnerClient": {
+      "Value": {
+        "Ref": "RunnerClient"
+      }
+    },
+    "OperatorPool": {
+      "Value": {
+        "Ref": "OperatorPool"
+      }
+    },
+    "OperatorClient": {
+      "Value": {
+        "Ref": "OperatorClient"
+      }
+    }
+  }
+}

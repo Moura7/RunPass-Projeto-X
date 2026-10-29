@@ -1,0 +1,30 @@
+meta {
+  name: 05 - Editar perfil
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/me
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{newRunnerToken}}
+  Content-Type: application/json
+  Idempotency-Key: bruno-local-5
+}
+
+body:json {
+  {
+    "expectedVersion": 1,
+    "bio": "Teste local com dados sinteticos"
+  }
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

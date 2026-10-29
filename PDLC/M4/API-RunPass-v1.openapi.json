@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "RunPass API — contrato inicial parcial",
-    "version": "0.7.0-draft",
-    "description": "Review contract covering primary mobile and operational MVP journeys. Proposed routes/schemas, not deployed endpoints. x-required-role, x-required-permission, x-requires-mfa and x-requires-beta-admission document backend checks; they do not enforce security automatically. Cognito signup/login/token recovery are provider flows, not implemented by this API. Coverage is not proof of completeness. Contract coverage reviewed against PRD; official medal references and edition versions added. Structural validation is not functional/security certification. Share cards are generated locally in Flutter using authorized current data; no backend card-rendering endpoint is required by the approved MVP."
+    "version": "0.8.0-draft",
+    "description": "Review contract covering primary mobile and operational MVP journeys. Proposed routes/schemas, not deployed endpoints. x-required-role, x-required-permission, x-requires-mfa and x-requires-beta-admission document backend checks; they do not enforce security automatically. Cognito signup/login/token recovery are provider flows, not implemented by this API. Coverage is not proof of completeness. Contract coverage reviewed against PRD; official medal references and edition versions added. Structural validation is not functional/security certification. Share cards are generated locally in Flutter using authorized current data; no backend card-rendering endpoint is required by the approved MVP. S01: bootstrap de perfil, limites e upload pessoal; modelo físico em MODELO-DYNAMODB-RunPass-v1.md. Sem implementação."
   },
   "security": [
     {
@@ -77,7 +77,7 @@
     "/uploads": {
       "post": {
         "operationId": "startUpload",
-        "description": "Cria intenção autenticada de upload. URL temporária não dispensa validação posterior do arquivo.",
+        "description": "Upload pessoal autenticado JPEG/PNG até 10.000.000 bytes; validação posterior limita decodificação a 25.000.000 pixels. Sessão de 15 minutos; não publica imagem. HEIC convertido/reduzido no mobile antes do envio.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -118,25 +118,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "uploadId",
-                    "uploadUrl",
-                    "expiresAt"
-                  ],
-                  "properties": {
-                    "uploadId": {
-                      "type": "string"
-                    },
-                    "uploadUrl": {
-                      "type": "string",
-                      "format": "uri"
-                    },
-                    "expiresAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    }
-                  }
+                  "$ref": "#/components/schemas/UploadSession"
                 }
               }
             }
@@ -166,7 +148,7 @@
     "/uploads/{id}/finalize": {
       "post": {
         "operationId": "finalizeUpload",
-        "description": "Confirma transferência e inicia validação do objeto pertencente ao usuário. Meta 5 segundos pós-upload; pendente não significa sucesso. HEIC requer solução compatível ainda em revisão.",
+        "description": "Finaliza até expiresAt, fixa a versão S3 observada e inicia validação privada. Retry não seleciona outra versão. Pending não autoriza conclusão; valid só após derivado sanitizado. HEIC deve ser convertido no mobile. Processamento tem prazo técnico de 15 minutos após finalize; timeout produz failed e preserva rascunho.",
         "parameters": [
           {
             "name": "id",
@@ -214,6 +196,9 @@
             "$ref": "#/components/responses/Error"
           },
           "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
             "$ref": "#/components/responses/Error"
           }
         },
@@ -266,7 +251,7 @@
     "/participations/{id}": {
       "patch": {
         "operationId": "patchParticipation",
-        "description": "Altera parcialmente dados da corrida de propriedade do usu?rio, sem editar a avalia??o. Revalida vers?o, imagem, unicidade e estado da edi??o. Troca para edi??o arquivada ? bloqueada. N?o exige preencher campos omitidos nem cria nova participa??o. Confirma??o de persist?ncia n?o significa RunScore j? atualizado.",
+        "description": "Altera somente campos enviados pelo titular, sem editar notas/comentário da avaliação. Revalida versões e unicidade; transferência para edição arquivada é proibida, mas registro já concluído nessa edição pode ser editado/excluído. Imagem anterior permanece vinculada se não houver troca explícita. Rascunho não cria medalha/review/score. Persistência não garante projeção já atualizada.",
         "parameters": [
           {
             "name": "id",
@@ -292,7 +277,7 @@
         },
         "responses": {
           "200": {
-            "description": "Opera??o persistida, ou resposta idempotente anterior",
+            "description": "Alteração persistida ou resultado idempotente autorizado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -434,7 +419,7 @@
     "/participations/{id}/review": {
       "put": {
         "operationId": "replaceParticipationReview",
-        "description": "Substitui a avalia??o completa de uma participa??o existente; oito notas sempre obrigat?rias. Opera??o somente pelo propriet?rio. Corre??o de avalia??o invalidada fica pending_review at? revis?o humana. N?o cria participa??o nem dispensa avalia??o inicial obrigat?ria. Agregado RunScore atualiza assincronamente. Omitir coment?rio remove o anterior da representa??o atual; preservar evento dur?vel para hist?rico informacional no data lake. Entrega ass?ncrona, pol?tica de dados e recupera??o ainda a detalhar. Hist?rico de auditoria aprovado inclui valores anteriores e novos das notas e do coment?rio, com acesso restrito; reten??o de 60 dias no beta aprovada, com revis?o antes do encerramento. Acesso e pol?tica de exclus?o/descarte ainda a detalhar. Consulta ao hist?rico informacional somente por Administradores autorizados da equipe RunPass, sem acesso para corredores ou Moderadores por padr?o; esta rota n?o retorna vers?es antigas.",
+        "description": "Substitui oito notas da avaliação do titular com versão esperada; comentário omitido remove o atual. Notas invalidadas corrigidas ficam pending_review até decisão humana. Não cria participação. Fonte e outboxes de negócio/auditoria persistidas atomicamente; RunScore é assíncrono. Histórico restrito antes/depois em S3 privado, 60 dias desde ocorrência, conta excluída antecipa limpeza para até sete dias. Esta rota não retorna versões históricas.",
         "parameters": [
           {
             "name": "id",
@@ -460,7 +445,7 @@
         },
         "responses": {
           "200": {
-            "description": "Opera??o persistida, ou resposta idempotente anterior",
+            "description": "Avaliação persistida ou resultado idempotente autorizado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -711,7 +696,7 @@
     "/editions": {
       "get": {
         "operationId": "listEditions",
-        "description": "List approved catalog editions. namePrefix matches only the start of normalized title; city, date range and distance can combine. Stable pagination; dateFrom <= dateTo. No public pending requests. Normalization and filter index plan remain proposals.",
+        "description": "Todas as combinações de city/state/distanceKm/namePrefix/dateFrom/dateTo são suportadas. Cidade exata e prefixo inicial de título normalizados sem acentos, sem diferença de caixa e com espaços colapsados; state é UF. dateFrom <= dateTo. Data crescente, ou título quando só há prefixo sem datas. No máximo 500 candidatos avaliados por resposta: página pode estar vazia e ainda ter nextCursor. Cursor autenticado, vinculado a ator/filtros/limite/ambiente, expira em 15 minutos (422 se inválido/expirado). Não há snapshot entre páginas sob edição concorrente. Plano físico no MODELO-DYNAMODB-RunPass-v1.md.",
         "responses": {
           "200": {
             "description": "Authorized result",
@@ -771,7 +756,8 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 160
             }
           },
           {
@@ -779,14 +765,18 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 100
             }
           },
           {
             "name": "state",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[A-Za-z]{2}$",
+              "minLength": 2,
+              "maxLength": 2
             }
           },
           {
@@ -1078,7 +1068,7 @@
     "/me": {
       "get": {
         "operationId": "getOwnProfile",
-        "description": "Owner profile only; account admission is a separate workflow.",
+        "description": "Perfil próprio, disponível após bootstrap sem exigir admissão. Identidade válida e estado atual obrigatório; excluída/suspensa não acessa API normal.",
         "responses": {
           "200": {
             "description": "Authorized result",
@@ -1115,7 +1105,7 @@
         "tags": [
           "Profiles"
         ],
-        "x-requires-beta-admission": true
+        "x-requires-beta-admission": false
       },
       "patch": {
         "operationId": "patchOwnProfile",
@@ -1178,7 +1168,7 @@
         "tags": [
           "Account"
         ],
-        "description": "Explicit confirmed owner request. Block API access and hide profile/content on acceptance, including requests using previously issued tokens; cleanup asynchronous. No deadline or retention exception invented. Receipt returned once before access is disabled; recovery/support mechanism is pending and must not reopen normal API access. No automatic refund of beta slot.",
+        "description": "Exclusão explícita do titular sem exigir vaga de corredor. Aceitação bloqueia acesso e oculta conteúdo imediatamente; limpeza pessoal ativa em até sete dias, inclusive lake e fotos próprias. Controle mínimo de exclusão pseudonimizado separado por até 15 dias, exceção aprovada; não estende retenção dos demais dados. Backups têm janela própria de sete dias. Recibo não comprova eliminação de todas as cópias; suporte restrito após bloqueio.",
         "responses": {
           "202": {
             "description": "Authorized result",
@@ -1218,6 +1208,59 @@
             "$ref": "#/components/parameters/IdempotencyKey"
           }
         ]
+      },
+      "put": {
+        "operationId": "createOwnProfile",
+        "tags": [
+          "Profiles"
+        ],
+        "description": "Bootstrap idempotente do perfil autenticado antes da admissão. Não substitui perfil existente; use PATCH após admissão. Verifica conta atual/exclusão; não aceita nascimento, e-mail, papéis ou status enviados pelo cliente.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOwnProfile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Perfil criado ou resultado idempotente autorizado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-requires-beta-admission": false
       }
     },
     "/profiles/{id}/participations": {
@@ -1230,7 +1273,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ParticipationPage"
+                  "$ref": "#/components/schemas/PublicParticipationPage"
                 }
               }
             }
@@ -4374,9 +4417,12 @@
         "in": "header",
         "required": true,
         "schema": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:-]+$"
         },
-        "description": "Escopo por ator e operação; corpo diferente com mesma chave gera conflito."
+        "description": "Escopo ator+operationId, com caminho e corpo canônicos no hash. Mesma chave/corpo retorna resultado autorizado; divergência=409. Janela de sete dias desde aceitação, sem renovação. Reaplica autorização/ocultação atuais, não reapresenta resposta privada antiga. Após expiração, invariantes e versões continuam obrigatórias."
       }
     },
     "responses": {
@@ -4436,7 +4482,9 @@
           },
           "medalImageReference": {
             "type": "string",
-            "description": "Imagem do catálogo ou upload do usuário validado; formato de referência ainda em revisão."
+            "description": "Identificador opaco de imagem validada neste ambiente, própria do ator ou versão oficial vigente da edição/distância. Não aceita chave S3 ou URL externa.",
+            "minLength": 1,
+            "maxLength": 200
           },
           "publishToFeed": {
             "type": "boolean",
@@ -4444,12 +4492,14 @@
           },
           "comment": {
             "type": "string",
-            "description": "Opcional; limite de tamanho pendente."
+            "description": "Até 2.000 caracteres Unicode; sem truncamento. No PUT, omissão remove comentário atual. Histórico restrito segue retenção e exclusão vigentes.",
+            "maxLength": 2000
           },
           "ratings": {
             "$ref": "#/components/schemas/ReviewRatings"
           }
-        }
+        },
+        "description": "Conclui somente rascunho de edição não arquivada cuja data não é futura em America/Sao_Paulo. Oito notas e imagem válida obrigatórias. Versão, conta, distância e imagem revalidadas no commit; publishToFeed é intenção explícita separada da conclusão."
       },
       "Participation": {
         "type": "object",
@@ -4498,7 +4548,8 @@
           },
           "bibNumber": {
             "type": "string",
-            "description": "Visibility not yet approved; do not include in public projections by default."
+            "description": "Visibility not yet approved; do not include in public projections by default.",
+            "maxLength": 40
           },
           "medalImageReference": {
             "type": "string"
@@ -4524,13 +4575,76 @@
             ]
           },
           "reasonCode": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "imageReference": {
             "type": "string",
-            "description": "Disponível apenas após validação."
+            "description": "Referência opaca imutável, somente em estado valid.",
+            "minLength": 1,
+            "maxLength": 200
           }
-        }
+        },
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "state": {
+                "enum": [
+                  "pending"
+                ]
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "imageReference"
+                  ]
+                },
+                {
+                  "required": [
+                    "reasonCode"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "state": {
+                "enum": [
+                  "valid"
+                ]
+              }
+            },
+            "required": [
+              "imageReference"
+            ],
+            "not": {
+              "required": [
+                "reasonCode"
+              ]
+            }
+          },
+          {
+            "properties": {
+              "state": {
+                "enum": [
+                  "failed"
+                ]
+              }
+            },
+            "required": [
+              "reasonCode"
+            ],
+            "not": {
+              "required": [
+                "imageReference"
+              ]
+            }
+          }
+        ]
       },
       "ReviewRatings": {
         "type": "object",
@@ -4589,7 +4703,8 @@
           },
           "comment": {
             "type": "string",
-            "description": "Optional; omission in PUT removes previous current comment. Preserve before/after audit event in restricted lake, retained 60 days from original occurrence. Privacy erasure policy still requires specification."
+            "description": "Até 2.000 caracteres Unicode; sem truncamento. No PUT, omissão remove comentário atual. Histórico restrito segue retenção e exclusão vigentes.",
+            "maxLength": 2000
           }
         }
       },
@@ -4613,7 +4728,9 @@
             "$ref": "#/components/schemas/ReviewRatings"
           },
           "comment": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Até 2.000 caracteres Unicode; sem truncamento. No PUT, omissão remove comentário atual. Histórico restrito segue retenção e exclusão vigentes."
           },
           "moderationState": {
             "type": "string",
@@ -4658,7 +4775,8 @@
           },
           "bibNumber": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "maxLength": 40
           },
           "showTime": {
             "type": "boolean",
@@ -4669,7 +4787,9 @@
           },
           "medalImageReference": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Identificador opaco de imagem validada neste ambiente, própria do ator ou versão oficial vigente da edição/distância. Não aceita chave S3 ou URL externa."
           },
           "distanceKm": {
             "type": "number",
@@ -4748,7 +4868,8 @@
           },
           "bibNumber": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "maxLength": 40
           },
           "distanceKm": {
             "type": "number",
@@ -4764,8 +4885,17 @@
               "distanceId"
             ],
             "not": {
-              "required": [
-                "editionRequestId"
+              "anyOf": [
+                {
+                  "required": [
+                    "editionRequestId"
+                  ]
+                },
+                {
+                  "required": [
+                    "distanceKm"
+                  ]
+                }
               ]
             }
           },
@@ -4775,8 +4905,17 @@
               "distanceKm"
             ],
             "not": {
-              "required": [
-                "editionId"
+              "anyOf": [
+                {
+                  "required": [
+                    "editionId"
+                  ]
+                },
+                {
+                  "required": [
+                    "distanceId"
+                  ]
+                }
               ]
             }
           }
@@ -5036,20 +5175,26 @@
           },
           "displayName": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 80
           },
           "username": {
             "type": "string",
-            "minLength": 1
+            "minLength": 3,
+            "maxLength": 30,
+            "pattern": "^[a-z0-9_]{3,30}$",
+            "description": "ASCII letras/dígitos/underscore, 3–30 caracteres. Entrada sem espaços/acentos; converter letras para minúsculas antes da reserva única e da representação."
           },
           "photoReference": {
             "type": "string"
           },
           "city": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 100
           },
           "bio": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 500
           },
           "participationCount": {
             "type": "integer",
@@ -5088,11 +5233,15 @@
           },
           "displayName": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 80
           },
           "username": {
             "type": "string",
-            "minLength": 1
+            "minLength": 3,
+            "maxLength": 30,
+            "pattern": "^[A-Za-z0-9_]{3,30}$",
+            "description": "ASCII letras/dígitos/underscore, 3–30 caracteres. Entrada sem espaços/acentos; converter letras para minúsculas antes da reserva única e da representação."
           },
           "photoReference": {
             "type": "string",
@@ -5100,14 +5249,16 @@
           },
           "city": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "maxLength": 100
           },
           "bio": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "maxLength": 500
           }
         },
-        "description": "Only sent fields change. Null clears optional fields. Username changes must reserve normalized name atomically. Lengths and rename policy require review."
+        "description": "Somente campos enviados mudam; null limpa opcionais. Username ASCII normalizado em minúsculas e reservado atomicamente. Nome não pode ser apenas whitespace. Versão obrigatória; não altera idade, admissão ou papéis."
       },
       "ProfilePage": {
         "type": "object",
@@ -6846,6 +6997,131 @@
             }
           }
         ]
+      },
+      "CreateOwnProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "displayName",
+          "username"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30,
+            "pattern": "^[A-Za-z0-9_]{3,30}$",
+            "description": "ASCII letras/dígitos/underscore, 3–30 caracteres. Entrada sem espaços/acentos; converter letras para minúsculas antes da reserva única e da representação."
+          }
+        },
+        "description": "Cria perfil inicial uma vez, sem conceder admissão. Identidade e e-mail verificado vêm do Cognito. Nome não pode ser apenas whitespace."
+      },
+      "UploadSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "uploadId",
+          "uploadUrl",
+          "expiresAt",
+          "uploadMethod",
+          "uploadHeaders"
+        ],
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uploadUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uploadMethod": {
+            "type": "string",
+            "enum": [
+              "PUT"
+            ]
+          },
+          "uploadHeaders": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Sessão e URL expiram 15 minutos desde emissão. Retry preserva prazo original. URL grava apenas temporário privado; finalize captura versão do objeto."
+      },
+      "PublicParticipation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "state",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "editionId": {
+            "type": "string"
+          },
+          "distanceId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "completed"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "timeSeconds": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "paceSecondsPerKm": {
+            "type": "number",
+            "minimum": 0
+          },
+          "placement": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "medalImageReference": {
+            "type": "string"
+          }
+        },
+        "description": "Histórico público autorizado: nunca rascunho, solicitação privada ou bib. Tempo/pace/colocação omitidos conforme visibilidade atual; schema não substitui autorização."
+      },
+      "PublicParticipationPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicParticipation"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
       }
     }
   }

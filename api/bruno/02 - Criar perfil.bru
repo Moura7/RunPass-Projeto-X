@@ -1,0 +1,30 @@
+meta {
+  name: 02 - Criar perfil
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{baseUrl}}/me
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{newRunnerToken}}
+  Content-Type: application/json
+  Idempotency-Key: bruno-local-2
+}
+
+body:json {
+  {
+    "displayName": "Corredor Local",
+    "username": "local_runner"
+  }
+}
+
+tests {
+  test("HTTP 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+}

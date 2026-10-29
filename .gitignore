@@ -13,3 +13,11 @@ build/
 *.key
 .DS_Store
 Thumbs.db
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+.local/
+api/bruno/environments/*.generated.bru
+api/bruno/environments/Local.bru

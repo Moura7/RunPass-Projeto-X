@@ -50,3 +50,8 @@ Produzir matriz de consultas/escritas e requisitos operacionais dos agregados: i
 ## Evidências necessárias
 
 Duplicação; ordem invertida; falha entre efeito e confirmação; replay no limite da janela e após expiração; consumidor atrasado; restauração com evento já aplicado; exclusão concorrente; recomposição de RunScore; reconstrução de feed com bloqueio/ocultação; carga e custo de conciliação. Nenhuma evidência de execução foi produzida nesta revisão documental.
+
+
+## Atualização S01 — controle de exclusões aprovado em 28/10/2026
+
+O usuário aprovou explicitamente controle mínimo de exclusão por até 15 dias desde aceitação, separado dos dados do produto, acessível somente à recuperação, com identificador pseudonimizado e datas, sem nome/e-mail/fotos/avaliações. É exceção específica ao prazo ordinário de sete dias; HMAC não é anonimização e os demais dados pessoais ativos continuam sujeitos à remoção em até sete dias. Sem renovação por consulta/replay. Desenho em MODELO-DYNAMODB-RunPass-v1.md: replay sete dias de allConfirmedAt, transporte de um dia, ledger condicionado à outbox viva/contribuição vigente, controle segregado sem backups que prolonguem retenção. Perda da autoridade de exclusões bloqueia recuperação. Isso detalha pendências históricas desses controles; comprovação e configuração reais permanecem necessárias. Não aprova por inferência o descarte de payload de auditoria pendente aos 60 dias nem prazos físicos de outros conteúdos.
