@@ -20,7 +20,7 @@ Painel completo, feed, pós-beta e detalhes operacionais devem ser resolvidos an
 
 Corredores precisam descobrir provas, registrar experiências concluídas, organizar medalhas e compartilhar avaliações e conquistas. O MVP deve validar adesão, repetição e interação com até mil corredores, sem exigir arquitetura de produção futura completa no primeiro lançamento.
 
-Aplicativo Flutter/Dart para Android e iPhone, backend Python/FastAPI em Lambda, armazenamento operacional DynamoDB e operação inicial na AWS São Paulo. Não há site público para corredores no MVP. A equipe RunPass mantém catálogo e moderação por interface administrativa.
+Aplicativo Flutter/Dart para Android e iPhone, backend Python/FastAPI em Lambda, armazenamento operacional DynamoDB e operação inicial na AWS São Paulo (`sa-east-1`). Não há site público para corredores no MVP. A equipe RunPass mantém catálogo e moderação por interface administrativa.
 
 ## 2. Estado das decisões e execução incremental
 
@@ -282,4 +282,25 @@ Implementados PUT completo de review, remoção de comentário omitido, históri
 
 ## S09 — preparação local, 01/11/2026
 
-Preparado template CloudFormation candidato para seis tabelas, buckets privados de medalhas/auditoria, filas/DLQs e alarmes, somado ao template Cognito existente. `make infra-check` valida os dois arquivos localmente. Gate, evidências e lacunas estão em S09-integracao-dev.md. Orçamento continua parcial e sem teto; conta DEV, OIDC, responsáveis e autorização de provisionamento não estão registrados. Nenhum recurso AWS foi criado e integração/aceite não foram declarados.
+Preparado template CloudFormation candidato para seis tabelas, buckets privados de medalhas/auditoria, filas/DLQs e alarmes, somado ao template Cognito existente. `make infra-check` valida os dois arquivos localmente. Gate, evidências e lacunas estão em S09-integracao-dev.md. Em 01/11/2026, o usuário autorizou teto de R$ 1.000/mês para DEV; orçamento continua parcial e deve ser atualizado antes do change set. Conta DEV, OIDC, responsáveis e autorização de provisionamento não estão registrados. Nenhum recurso AWS foi criado e integração/aceite não foram declarados.
+
+## Região AWS — decisão de 02/11/2026
+
+O usuário decidiu migrar a região inicial de `sa-east-1` (São Paulo) para `us-east-2` (Ohio). Esta decisão posterior prevalece sobre as menções a São Paulo e `sa-east-1` na linha de base 5.1 e nos registros anteriores, que ficam preservados como histórico.
+
+Motivo: o projeto AWS disponível usa a nova experiência, que só cria recursos na região do projeto, e uma política de organização gerenciada pela AWS nega `sa-east-1`. Tentar contornar essa política não é opção. Os onze serviços da arquitetura (DynamoDB, S3, SQS, Lambda, API Gateway, Cognito, SSM, CloudWatch Logs, SNS, EventBridge e CloudFormation) responderam em `us-east-2` em chamadas somente de leitura.
+
+Consequências em aberto, nenhuma aprovada por inferência:
+
+- **Dados pessoais fora do Brasil.** Cadastro, nascimento, fotos e avaliações passam a ser armazenados nos Estados Unidos. A revisão de privacidade e de transferência internacional de dados pessoais (LGPD) é necessária antes de qualquer dado real, beta ou PROD. Esta decisão cobre a preparação e o DEV com dados sintéticos.
+- **Latência.** O público é brasileiro e o desempenho de imagem (cinco segundos) e de RunScore (dez segundos) deve ser medido no DEV, não presumido.
+- **Orçamento.** As tarifas coletadas em 26/10/2026 são de São Paulo e não valem para Ohio; o orçamento precisa ser recalculado antes do change set. O teto DEV de R$ 1.000/mês continua o limite financeiro.
+- **PROD.** Aprovação própria continua exigida, inclusive para decidir se a região de PROD será a mesma.
+
+O fuso `America/Sao_Paulo` usado na regra de data de edições futuras não muda: ele descreve a data local das provas, não a região de hospedagem. Nenhum recurso foi provisionado, e esta decisão não autoriza provisionamento.
+
+## Região AWS — retorno a São Paulo em 02/11/2026
+
+O usuário criou uma conta AWS padrão (`<ID da conta DEV>`) e decidiu manter a região `sa-east-1`. Esta decisão posterior substitui a migração para `us-east-2` registrada acima, que fica preservada como histórico. A conta de projeto `<ID da conta de projeto>` não é usada para o RunPass: ela só opera em `us-east-2`, por política gerenciada pela AWS.
+
+Efeitos: dados pessoais voltam a ficar no Brasil, e a revisão de transferência internacional deixa de ser necessária. As tarifas de São Paulo coletadas em 26/10/2026 voltam a valer como base, ainda sujeitas a atualização antes do change set. O teto DEV de R$ 1.000/mês é o mesmo. Provisionamento continua não autorizado, e PROD exige aprovação própria.

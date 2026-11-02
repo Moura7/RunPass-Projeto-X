@@ -2,7 +2,7 @@
 
 Data: 29/10/2026. Fonte única: SPEC_RunPass_MVP_v1.md. Escopo aprovado: autenticação → catálogo → rascunho → imagem → conclusão → avaliação e medalha.
 
-Estado do plano: S00 preparada/verificada e sequência S01 autorizada pelo usuário. S01 aceita pelo usuário após revisão dos três blocos conforme S01-desenho-e-contratos.md; S02, S03 e S04 implementadas localmente em revisão. S05 está em execução, S06 e S07 estão em revisão local, S08 está em execução local e S09 entrou em preparação local sem provisionamento. Cada slice possui dependências e saída verificável. Propostas técnicas são resolvidas dentro dos slices de desenho; não exigem reaprovação de nomes de atributos. Escolhas que alterem produto, custo ou privacidade voltam ao usuário.
+Estado do plano: S00 preparada/verificada e sequência S01 autorizada pelo usuário. S01 aceita pelo usuário após revisão dos três blocos conforme S01-desenho-e-contratos.md; S02, S03 e S04 implementadas localmente em revisão. S05 está em execução, S06, S07 e S08 estão em revisão local e S09 entrou em preparação local sem provisionamento. Cada slice possui dependências e saída verificável. Propostas técnicas são resolvidas dentro dos slices de desenho; não exigem reaprovação de nomes de atributos. Escolhas que alterem produto, custo ou privacidade voltam ao usuário.
 
 ## Regras de execução
 
@@ -24,8 +24,8 @@ Estado do plano: S00 preparada/verificada e sequência S01 autorizada pelo usuá
 | S05 | Upload e imagem validada | S02, S04 | Em execução — backend/mobile locais validados; iPhone real e S3 pendentes |
 | S06 | Conclusão atômica, avaliação e medalha | S04, S05 | Em revisão — backend e jornada mobile locais validados |
 | S07 | Entrega de eventos, RunScore e histórico restrito | S06 | Em revisão local — consumidores, recuperação e expiração validados |
-| S08 | Edição, exclusão e proteção de dados | S06, S07 | Em execução local — backend de edição/exclusão e limpeza retomável implementado |
-| S09 | Integração real em DEV e aceite da entrega | S02–S08, orçamento/autorização | Preparação local; provisionamento bloqueado pelos gates |
+| S08 | Edição, exclusão e proteção de dados | S06, S07 | Em revisão local — backend/mobile de edição, exclusão e limpeza retomável validados |
+| S09 | Integração real em DEV e aceite da entrega | S02–S08, orçamento/autorização | Preparação local; teto DEV de R$ 1.000/mês aprovado, provisionamento ainda bloqueado pelos demais gates |
 
 Não é uma decomposição de todo o MVP. Feed completo, interações sociais, wishlist, painel completo e pós-beta terão slices próprios depois; não foram removidos do escopo do produto.
 
@@ -156,3 +156,23 @@ Teste humano no simulador em 29/10/2026 confirmou preenchimento, imagem validada
 ## Evidência S07 — 01/11/2026
 
 Consumidores locais em execução para `score` e `audit`, com DELIVERY idempotente por evento/destino, contribuição vigente, soma inteira das oito notas, reconciliação da fonte atual para eventos fora de ordem, `dispatchEpoch`, confirmação final e prazo de replay sem renovação. Pendências possuem marcador durável em 16 shards e são reencontradas pelo reconciliador. Auditoria local separa comentário do evento operacional e fixa expiração de 60 dias desde a ocorrência. Cinco testes específicos passaram; relatório: S07-eventos-runscore-auditoria.md. SQS/S3, lease/fencing, carga, latência e descarte físico continuam pendentes para integração autorizada.
+
+## Evidência S08 — 01/11/2026
+
+Edição versionada, substituição de avaliação, exclusão de participação e de conta implementadas localmente, com limpeza retomável e telas Flutter. Relatório: S08-edicao-exclusao-privacidade.md.
+
+## Evidência de correções e preparação S09 — 02/11/2026
+
+Correções com teste de regressão visto falhando antes:
+
+- **S05:** PNG de 23 KB com 196 megapixels derrubava a validação com exceção não tratada; limite agora é checado antes de decodificar e a imagem falha fechada. Comentário JPEG sobrevivia à remoção de metadados. JPEG MPO, comum em celulares, era recusado.
+- **S07:** reconciliador e expiração liam só a primeira página de cada shard; marcadores concluídos podiam esconder pendências.
+- **S08:** a exclusão de conta também lia só uma página e podia concluir deixando marcador com o identificador do titular. Faltava remover o usuário do Cognito e descobrir jobs aceitos (`run_pending`).
+
+Novos: adaptadores S3 de fotos e auditoria e remoção no Cognito (`aws_adapters.py`), handlers Lambda (`lambda_entry.py`), `infra/app.template.yaml`, Streams e políticas TLS em `infra/data.template.yaml`, `make lambda-package` e CI. Com adaptador de auditoria, o comentário fica só no objeto S3 e a linha em Operations é um localizador.
+
+Resultado: `make check` aprovado em Python 3.11 e 3.12, com 134 testes backend (eram 83), contrato e cfn-lint dos três templates. Os testes de eventos e exclusão também rodam por um cliente DynamoDB falso que serializa como o serviço. Stubber e cliente falso não comprovam AWS. Mobile não foi alterado nem reverificado. Sem provisionamento, deploy, commit, push ou aceite humano. Pendências: S09-integracao-dev.md.
+
+## Região AWS — 02/11/2026
+
+Uma migração para `us-east-2` foi feita e desfeita no mesmo dia: a conta de projeto `<ID da conta de projeto>` só opera em `us-east-2` e foi substituída pela conta padrão `<ID da conta DEV>`, em `sa-east-1` (SPEC, seção "Região AWS"). O que ficou: `JwksProvider` recebe a região configurada e só aceita o issuer Cognito dela, com teste de rejeição para outras regiões, e `AwsSettings` tem `region`, lida de `AWS_REGION` na Lambda. Provisionamento continua não autorizado.

@@ -458,3 +458,5 @@ Usuário autorizou seguir para S02. Implementadas nove operações HTTP de perfi
 ## S03 — catálogo local em revisão, 28/10/2026
 
 Após liberar espaço do Mac e solicitar retomada, implementadas GET /editions e GET /editions/{id}, filtros combináveis/cursor cifrado, carga interna em gerações com MFA/papel atual, auditoria e referências de imagem validadas. Seed sintético idempotente em memória e telas Flutter de catálogo/detalhe/seleção. S03-catalogo.md registra resultados e limites; OpenAPI 0.8.0-draft preservado. Demonstração debug separada sem rede preparada para teste visual no simulador, sem afirmar autenticação real ou integração de backend. Usuário autorizou reinstalar runtime iOS 27.1 após falha de inicialização; resultado nativo depende de evidência no relatório. Sem aceite humano, AWS, deploy, commit ou push. Próximo slice: S04 rascunho.
+
+- Atualização de 02/11/2026: a região AWS inicial continua São Paulo (`sa-east-1`), agora na conta padrão `263097734277`. Uma troca para Ohio foi decidida e revertida no mesmo dia; ver SPEC, seção "Região AWS".

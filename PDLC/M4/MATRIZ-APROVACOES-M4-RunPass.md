@@ -79,3 +79,5 @@ Pergunta explícita apresentou controle mínimo de exclusão por até 15 dias, s
 ## Aceite da revisão S01 — 28/10/2026
 
 Usuário concordou com os três blocos revisados sequencialmente: perfil/cadastro, catálogo/avaliações e fotos/falhas. Último bloco confirma conversão HEIC e redução de resolução no mobile, sessão de 15 minutos, imagem validada antes da conclusão e preservação do rascunho em falha/timeout de processamento (15 minutos após finalize). Meta pós-upload de cinco segundos mantida, sujeita a testes. S01 aceita no escopo do desenho revisado; próximo slice S02 local. Detalhes e evidências em S01-desenho-e-contratos.md. Não comprova implementação ou testes reais, não dispensa dependências dos slices seguintes e não autoriza recursos pagos, deploy ou beta.
+
+**Atualização 02/11/2026:** a região São Paulo foi mantida. Uma troca para `us-east-2` foi decidida e desfeita no mesmo dia, depois que o usuário criou a conta padrão `<ID da conta DEV>`; ver SPEC, seção "Região AWS".

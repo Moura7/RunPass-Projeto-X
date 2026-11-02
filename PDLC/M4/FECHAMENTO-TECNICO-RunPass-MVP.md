@@ -4,7 +4,7 @@
 
 ## 1. Decisões consolidadas
 
-Flutter/Dart no app; Python/FastAPI em Lambda; AWS São Paulo; DynamoDB sob demanda; CloudFormation; DEV/PROD em contas distintas. GitHub Actions com OIDC, PR/testes/revisão humana, promoção dos mesmos artefatos e aprovação manual de PROD. Painel Flutter Web ainda candidato.
+Flutter/Dart no app; Python/FastAPI em Lambda; AWS São Paulo (`sa-east-1`); DynamoDB sob demanda; CloudFormation; DEV/PROD em contas distintas. GitHub Actions com OIDC, PR/testes/revisão humana, promoção dos mesmos artefatos e aprovação manual de PROD. Painel Flutter Web ainda candidato.
 
 Imagem: JPEG/PNG até 10 MB original, otimização para meta de 1 MB, remoção de GPS, HEIC a validar; retorno de validação em até 5 s após upload em condições normais. RunScore assíncrono com meta de 10 s. Exclusão oculta imediatamente e limpa depois. MFA administrativo. RPO 5 min, RTO 4 h e pontos de recuperação por 7 dias no beta, sujeitos a ensaio e cobertura por cenário.
 
