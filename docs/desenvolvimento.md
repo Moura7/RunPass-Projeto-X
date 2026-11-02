@@ -54,7 +54,7 @@ flutter run --dart-define=RUNPASS_API_URL=https://api.example.test --dart-define
 
 Os endereços acima são exemplos, não serviços disponíveis. Backend: consulte `backend/README.md` para factory/configuração explícita e comando que falha fechado por padrão. O template Cognito pode ser verificado com `make infra-check` sem aplicar. Principal/substituto e recuperação de operadores: `docs/operadores.md`.
 
-Se o ambiente virtual sob Documents apresentar lentidão ao ler dependências, é possível criar outro em diretório temporário e usar os mesmos requisitos: `make check PYTHON=/caminho/venv/bin/python RUFF=/caminho/venv/bin/ruff CFN_LINT=/caminho/venv/bin/cfn-lint`. Registrar caminho e resultados; não confundir troca de diretório com mudança de versões.
+Se o ambiente virtual sob Documents apresentar lentidão ao ler dependências, crie outro fora dessa pasta com os mesmos requisitos: `make setup VENV=~/.cache/runpass/venv` e `make check VENV=~/.cache/runpass/venv`. Registrar caminho e resultados; não confundir troca de diretório com mudança de versões.
 
 ## Catálogo S03
 

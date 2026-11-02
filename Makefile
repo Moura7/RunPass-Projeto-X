@@ -1,12 +1,13 @@
-PYTHON ?= .venv/bin/python
-RUFF ?= .venv/bin/ruff
+VENV ?= .venv
+PYTHON ?= $(VENV)/bin/python
+RUFF ?= $(VENV)/bin/ruff
 FLUTTER ?= flutter
-CFN_LINT ?= .venv/bin/cfn-lint
+CFN_LINT ?= $(VENV)/bin/cfn-lint
 
-.PHONY: setup check lint format contract test infra-check catalog-seed api-local mobile-setup mobile-check
+.PHONY: setup check lint format contract test infra-check lambda-package catalog-seed api-local mobile-setup mobile-check
 
 setup:
-	python3 -m venv .venv
+	python3 -m venv $(VENV)
 	$(PYTHON) -m pip install -r requirements-dev.lock
 
 check: lint contract test infra-check
@@ -26,7 +27,10 @@ test:
 	PYTHONPATH=backend $(PYTHON) -m unittest discover -s backend/tests -v
 
 infra-check:
-	$(CFN_LINT) -t infra/identity.template.json infra/data.template.yaml -r sa-east-1
+	$(CFN_LINT) -t infra/identity.template.json infra/data.template.yaml infra/app.template.yaml -r sa-east-1
+
+lambda-package:
+	PYTHON=$(PYTHON) scripts/package-lambda.sh
 
 catalog-seed:
 	PYTHONPATH=backend $(PYTHON) -m runpass.seed_catalog

@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: RunPass S09 data, object, queue and alarm candidate; NOT deployed.
+Description: RunPass S09 data, object, queue and alarm candidate; NOT deployed. Apply before app.template.yaml.
 
 Parameters:
   Environment:
@@ -82,6 +82,7 @@ Resources:
       SSESpecification: {SSEEnabled: true}
       PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: true}
       DeletionProtectionEnabled: !If [IsProd, true, false]
+      StreamSpecification: {StreamViewType: NEW_IMAGE}
       TimeToLiveSpecification:
         AttributeName: expiresAt
         Enabled: true
@@ -185,6 +186,42 @@ Resources:
         - {Key: Project, Value: RunPass}
         - {Key: Environment, Value: !Ref Environment}
 
+  MedalBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MedalBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt MedalBucket.Arn
+              - !Sub '${MedalBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  AuditBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AuditBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt AuditBucket.Arn
+              - !Sub '${AuditBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
   EventDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -260,14 +297,59 @@ Resources:
       AlarmActions: [!Ref CriticalAlerts]
 
 Outputs:
-  IdentityTable: {Value: !Ref IdentityTable}
-  CatalogTable: {Value: !Ref CatalogTable}
-  HistoryTable: {Value: !Ref HistoryTable}
-  OperationsTable: {Value: !Ref OperationsTable}
-  ProjectionsTable: {Value: !Ref ProjectionsTable}
-  ErasureControlTable: {Value: !Ref ErasureControlTable}
-  MedalBucket: {Value: !Ref MedalBucket}
-  AuditBucket: {Value: !Ref AuditBucket}
-  EventQueueUrl: {Value: !Ref EventQueue}
-  AuditQueueUrl: {Value: !Ref AuditQueue}
-  CriticalAlertsTopic: {Value: !Ref CriticalAlerts}
+  IdentityTable:
+    Value: !Ref IdentityTable
+    Export:
+      Name: !Sub '${AWS::StackName}-IdentityTable'
+  CatalogTable:
+    Value: !Ref CatalogTable
+    Export:
+      Name: !Sub '${AWS::StackName}-CatalogTable'
+  HistoryTable:
+    Value: !Ref HistoryTable
+    Export:
+      Name: !Sub '${AWS::StackName}-HistoryTable'
+  OperationsTable:
+    Value: !Ref OperationsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-OperationsTable'
+  OperationsStreamArn:
+    Value: !GetAtt OperationsTable.StreamArn
+    Export:
+      Name: !Sub '${AWS::StackName}-OperationsStreamArn'
+  ProjectionsTable:
+    Value: !Ref ProjectionsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ProjectionsTable'
+  ErasureControlTable:
+    Value: !Ref ErasureControlTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ErasureControlTable'
+  MedalBucket:
+    Value: !Ref MedalBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-MedalBucket'
+  AuditBucket:
+    Value: !Ref AuditBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AuditBucket'
+  EventQueueUrl:
+    Value: !Ref EventQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-EventQueueUrl'
+  EventQueueArn:
+    Value: !GetAtt EventQueue.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EventQueueArn'
+  AuditQueueUrl:
+    Value: !Ref AuditQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-AuditQueueUrl'
+  AuditQueueArn:
+    Value: !GetAtt AuditQueue.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AuditQueueArn'
+  CriticalAlertsTopic:
+    Value: !Ref CriticalAlerts
+    Export:
+      Name: !Sub '${AWS::StackName}-CriticalAlertsTopic'

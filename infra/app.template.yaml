@@ -1,0 +1,775 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RunPass S09 API and workers candidate; NOT deployed. Sizes are hypotheses to measure in DEV.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+  DataStack:
+    Type: String
+    Description: Name of the applied data.template.yaml stack
+  ArtifactBucket:
+    Type: String
+  ArtifactKey:
+    Type: String
+    Description: Versioned key of the zip built by scripts/package-lambda.sh
+  RunnerUserPoolId:
+    Type: String
+    AllowedPattern: '^[a-z]{2}-[a-z]+-[0-9]_[A-Za-z0-9]+$'
+  RunnerClientId:
+    Type: String
+  ErasureHmacParameter:
+    Type: String
+    AllowedPattern: '^/.+'
+    Description: SSM SecureString name; created out of band so its value never reaches a template
+  CursorKeyParameter:
+    Type: String
+    AllowedPattern: '^/.+'
+    Description: SSM SecureString name holding the Fernet cursor key
+  MaintenanceSchedule:
+    Type: String
+    Default: rate(5 minutes)
+  ApiRateLimit:
+    Type: Number
+    Default: 20
+  ApiBurstLimit:
+    Type: Number
+    Default: 40
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+
+Resources:
+  ApiFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: !If [IsProd, 30, 7]
+
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: runpass.lambda_entry.api_handler
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      MemorySize: 1024
+      Timeout: 29
+      Role: !GetAtt ApiFunctionRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref ApiFunctionLogs
+      Environment:
+        Variables:
+          RUNPASS_ENV: !Ref Environment
+          RUNPASS_RUNNER_ISSUER: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${RunnerUserPoolId}'
+          RUNPASS_RUNNER_CLIENT_ID: !Ref RunnerClientId
+          RUNPASS_ERASURE_HMAC_PARAM: !Ref ErasureHmacParameter
+          RUNPASS_IDENTITY_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-IdentityTable'
+          RUNPASS_OPERATIONS_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+          RUNPASS_ERASURE_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-ErasureControlTable'
+          RUNPASS_CATALOG_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-CatalogTable'
+          RUNPASS_HISTORY_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-HistoryTable'
+          RUNPASS_PROJECTIONS_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-ProjectionsTable'
+          RUNPASS_CURSOR_KEY_PARAM: !Ref CursorKeyParameter
+          RUNPASS_MEDAL_BUCKET:
+            Fn::ImportValue: !Sub '${DataStack}-MedalBucket'
+      Tags:
+        - {Key: Project, Value: RunPass}
+        - {Key: Environment, Value: !Ref Environment}
+
+  ApiFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: least-privilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WriteOwnLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ApiFunctionLogs.Arn
+              - Sid: OwnData
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:ConditionCheckItem
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-IdentityTable'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-HistoryTable'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-ErasureControlTable'
+              - Sid: ReadCatalog
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:ConditionCheckItem
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-CatalogTable'
+              - Sid: RunnerPhotos
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}/temporary/*'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-MedalBucket'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}/derived/*'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-MedalBucket'
+              - Sid: TellMissingUploadApart
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-MedalBucket'
+              - Sid: ReadSecretsAtStartup
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ErasureHmacParameter}'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${CursorKeyParameter}'
+
+  ScoreConsumerLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: !If [IsProd, 30, 7]
+
+  ScoreConsumer:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: runpass.lambda_entry.consumer_handler
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      MemorySize: 256
+      Timeout: 30
+      Role: !GetAtt ScoreConsumerRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref ScoreConsumerLogs
+      Environment:
+        Variables:
+          RUNPASS_ENV: !Ref Environment
+          RUNPASS_RUNNER_ISSUER: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${RunnerUserPoolId}'
+          RUNPASS_RUNNER_CLIENT_ID: !Ref RunnerClientId
+          RUNPASS_ERASURE_HMAC_PARAM: !Ref ErasureHmacParameter
+          RUNPASS_IDENTITY_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-IdentityTable'
+          RUNPASS_OPERATIONS_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+          RUNPASS_ERASURE_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-ErasureControlTable'
+          RUNPASS_CATALOG_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-CatalogTable'
+          RUNPASS_HISTORY_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-HistoryTable'
+          RUNPASS_PROJECTIONS_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-ProjectionsTable'
+          RUNPASS_CONSUMER: score
+          RUNPASS_AUDIT_BUCKET:
+            Fn::ImportValue: !Sub '${DataStack}-AuditBucket'
+      Tags:
+        - {Key: Project, Value: RunPass}
+        - {Key: Environment, Value: !Ref Environment}
+
+  ScoreConsumerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: least-privilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WriteOwnLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ScoreConsumerLogs.Arn
+              - Sid: ReadQueue
+                Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  Fn::ImportValue: !Sub '${DataStack}-EventQueueArn'
+              - Sid: Effects
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:ConditionCheckItem
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-ProjectionsTable'
+              - Sid: Sources
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:ConditionCheckItem
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-IdentityTable'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-HistoryTable'
+              - Sid: ReadSecretsAtStartup
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ErasureHmacParameter}'
+
+  ScoreConsumerSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !Ref ScoreConsumer
+      EventSourceArn:
+        Fn::ImportValue: !Sub '${DataStack}-EventQueueArn'
+      BatchSize: 5
+      FunctionResponseTypes: [ReportBatchItemFailures]
+      ScalingConfig: {MaximumConcurrency: 2}
+
+  AuditConsumerLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: !If [IsProd, 30, 7]
+
+  AuditConsumer:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: runpass.lambda_entry.consumer_handler
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      MemorySize: 256
+      Timeout: 30
+      Role: !GetAtt AuditConsumerRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref AuditConsumerLogs
+      Environment:
+        Variables:
+          RUNPASS_ENV: !Ref Environment
+          RUNPASS_RUNNER_ISSUER: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${RunnerUserPoolId}'
+          RUNPASS_RUNNER_CLIENT_ID: !Ref RunnerClientId
+          RUNPASS_ERASURE_HMAC_PARAM: !Ref ErasureHmacParameter
+          RUNPASS_IDENTITY_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-IdentityTable'
+          RUNPASS_OPERATIONS_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+          RUNPASS_ERASURE_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-ErasureControlTable'
+          RUNPASS_CATALOG_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-CatalogTable'
+          RUNPASS_HISTORY_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-HistoryTable'
+          RUNPASS_PROJECTIONS_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-ProjectionsTable'
+          RUNPASS_CONSUMER: audit
+          RUNPASS_AUDIT_BUCKET:
+            Fn::ImportValue: !Sub '${DataStack}-AuditBucket'
+      Tags:
+        - {Key: Project, Value: RunPass}
+        - {Key: Environment, Value: !Ref Environment}
+
+  AuditConsumerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: least-privilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WriteOwnLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt AuditConsumerLogs.Arn
+              - Sid: ReadQueue
+                Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  Fn::ImportValue: !Sub '${DataStack}-AuditQueueArn'
+              - Sid: Effects
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:ConditionCheckItem
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+              - Sid: Sources
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:ConditionCheckItem
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-HistoryTable'
+              - Sid: AuditObjects
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}/*'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-AuditBucket'
+              - Sid: TellMissingObjectApart
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-AuditBucket'
+              - Sid: ReadSecretsAtStartup
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ErasureHmacParameter}'
+
+  AuditConsumerSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !Ref AuditConsumer
+      EventSourceArn:
+        Fn::ImportValue: !Sub '${DataStack}-AuditQueueArn'
+      BatchSize: 5
+      FunctionResponseTypes: [ReportBatchItemFailures]
+      ScalingConfig: {MaximumConcurrency: 2}
+
+  PublisherLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: !If [IsProd, 30, 7]
+
+  Publisher:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: runpass.lambda_entry.publisher_handler
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      MemorySize: 256
+      Timeout: 30
+      Role: !GetAtt PublisherRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref PublisherLogs
+      Environment:
+        Variables:
+          RUNPASS_OPERATIONS_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+          RUNPASS_SCORE_QUEUE_URL:
+            Fn::ImportValue: !Sub '${DataStack}-EventQueueUrl'
+          RUNPASS_AUDIT_QUEUE_URL:
+            Fn::ImportValue: !Sub '${DataStack}-AuditQueueUrl'
+      Tags:
+        - {Key: Project, Value: RunPass}
+        - {Key: Environment, Value: !Ref Environment}
+
+  PublisherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: least-privilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WriteOwnLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt PublisherLogs.Arn
+              - Sid: ReadDispatchEpoch
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+              - Sid: ReadStream
+                Effect: Allow
+                Action:
+                  - dynamodb:DescribeStream
+                  - dynamodb:GetRecords
+                  - dynamodb:GetShardIterator
+                Resource:
+                  Fn::ImportValue: !Sub '${DataStack}-OperationsStreamArn'
+              - Sid: SendReferences
+                Effect: Allow
+                Action: sqs:SendMessage
+                Resource:
+                  - {Fn::ImportValue: !Sub '${DataStack}-EventQueueArn'}
+                  - {Fn::ImportValue: !Sub '${DataStack}-AuditQueueArn'}
+
+  PublisherSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !Ref Publisher
+      EventSourceArn:
+        Fn::ImportValue: !Sub '${DataStack}-OperationsStreamArn'
+      StartingPosition: LATEST
+      BatchSize: 10
+      MaximumRetryAttempts: 2
+      MaximumRecordAgeInSeconds: 3600
+      FunctionResponseTypes: [ReportBatchItemFailures]
+      FilterCriteria:
+        Filters:
+          - Pattern: '{"eventName":["INSERT"],"dynamodb":{"Keys":{"PK":{"S":[{"prefix":"WORK#event#pending#"}]}}}}'
+
+  MaintenanceLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: !If [IsProd, 30, 7]
+
+  Maintenance:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: runpass.lambda_entry.maintenance_handler
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      MemorySize: 512
+      Timeout: 240
+      Role: !GetAtt MaintenanceRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref MaintenanceLogs
+      Environment:
+        Variables:
+          RUNPASS_ENV: !Ref Environment
+          RUNPASS_RUNNER_ISSUER: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${RunnerUserPoolId}'
+          RUNPASS_RUNNER_CLIENT_ID: !Ref RunnerClientId
+          RUNPASS_ERASURE_HMAC_PARAM: !Ref ErasureHmacParameter
+          RUNPASS_IDENTITY_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-IdentityTable'
+          RUNPASS_OPERATIONS_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+          RUNPASS_ERASURE_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-ErasureControlTable'
+          RUNPASS_CATALOG_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-CatalogTable'
+          RUNPASS_HISTORY_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-HistoryTable'
+          RUNPASS_PROJECTIONS_TABLE:
+            Fn::ImportValue: !Sub '${DataStack}-ProjectionsTable'
+          RUNPASS_RUNNER_USER_POOL_ID: !Ref RunnerUserPoolId
+          RUNPASS_MEDAL_BUCKET:
+            Fn::ImportValue: !Sub '${DataStack}-MedalBucket'
+          RUNPASS_AUDIT_BUCKET:
+            Fn::ImportValue: !Sub '${DataStack}-AuditBucket'
+      Tags:
+        - {Key: Project, Value: RunPass}
+        - {Key: Environment, Value: !Ref Environment}
+
+  MaintenanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: least-privilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WriteOwnLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt MaintenanceLogs.Arn
+              - Sid: ReconcileAndErase
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:ConditionCheckItem
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-IdentityTable'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-HistoryTable'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-OperationsTable'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-ProjectionsTable'
+              - Sid: ErasePhotos
+                Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}/temporary/*'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-MedalBucket'
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}/derived/*'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-MedalBucket'
+              - Sid: ListPhotoVersions
+                Effect: Allow
+                Action:
+                  - s3:ListBucketVersions
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-MedalBucket'
+              - Sid: ManageAuditObjects
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}/*'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-AuditBucket'
+              - Sid: ListAuditVersions
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Resource:
+                  - !Sub
+                    - 'arn:${AWS::Partition}:s3:::${Name}'
+                    - Name:
+                        Fn::ImportValue: !Sub '${DataStack}-AuditBucket'
+              - Sid: EraseRunnerIdentity
+                Effect: Allow
+                Action: cognito-idp:AdminDeleteUser
+                Resource: !Sub 'arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${RunnerUserPoolId}'
+              - Sid: ReadSecretsAtStartup
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ErasureHmacParameter}'
+
+  MaintenanceSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref Maintenance
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MaintenanceRule.Arn
+
+  MaintenanceRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: !Ref MaintenanceSchedule
+      State: ENABLED
+      Targets:
+        - Id: maintenance
+          Arn: !GetAtt Maintenance.Arn
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'runpass-${Environment}'
+      ProtocolType: HTTP
+
+  HttpApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ApiFunction.Arn
+      PayloadFormatVersion: '2.0'
+      TimeoutInMillis: 29000
+
+  HttpApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: $default
+      Target: !Sub 'integrations/${HttpApiIntegration}'
+
+  HttpApiLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: !If [IsProd, 30, 7]
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref ApiRateLimit
+        ThrottlingBurstLimit: !Ref ApiBurstLimit
+      AccessLogSettings:
+        DestinationArn: !GetAtt HttpApiLogs.Arn
+        # Paths carry participation ids and query strings carry filters, so neither is logged.
+        Format: '{"requestId":"$context.requestId","method":"$context.httpMethod","status":"$context.status","latencyMs":"$context.responseLatency"}'
+
+  HttpApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ApiFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*'
+
+  ApiServerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: RunPass API returned server errors
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - {Name: ApiId, Value: !Ref HttpApi}
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${DataStack}-CriticalAlertsTopic'
+
+  MaintenanceErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: RunPass reconciliation, expiry or account erasure failed
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - {Name: FunctionName, Value: !Ref Maintenance}
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${DataStack}-CriticalAlertsTopic'
+
+Outputs:
+  ApiUrl:
+    Value: !GetAtt HttpApi.ApiEndpoint
