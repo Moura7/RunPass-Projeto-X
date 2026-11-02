@@ -139,3 +139,9 @@ class CompleteParticipation(Input):
         if value is not True:
             raise ValueError("Completion declaration required")
         return value
+
+
+class ReplaceReview(Input):
+    expectedVersion: Annotated[int, Field(ge=1)]
+    ratings: ReviewRatings
+    comment: Annotated[str, Field(max_length=2000)] | None = None

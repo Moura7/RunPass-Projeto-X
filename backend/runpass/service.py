@@ -312,6 +312,9 @@ class IdentityService:
         def work(read, write, account, now, replay):
             operation = str(uuid4())
             pk = "USER#" + principal.subject
+            profile = read(("identity", pk, "PROFILE"))
+            work_pk = "WORK#erase_account#pending#" + str(int(operation[:2], 16) % 16)
+            work_sk = stamp(now) + "#" + operation
             write(("identity", pk, "ACCOUNT"), {**(account or {}), "state": "deleting"})
             write(
                 self.erasure(principal.subject),
@@ -329,8 +332,18 @@ class IdentityService:
                     "type": "erase_account",
                     "acceptedAt": stamp(now),
                     "dueAt": stamp(now + timedelta(days=7)),
-                    "workPK": "WORK#erase_account#pending#" + str(int(operation[:2], 16) % 16),
-                    "workSK": stamp(now) + "#" + operation,
+                    "workPK": work_pk,
+                    "workSK": work_sk,
+                    "stage": "compensate",
+                    "username": profile.get("username") if profile else None,
+                },
+            )
+            write(
+                ("operations", work_pk, work_sk),
+                {
+                    "owner": principal.subject,
+                    "operationId": operation,
+                    "state": "pending",
                 },
             )
             return {

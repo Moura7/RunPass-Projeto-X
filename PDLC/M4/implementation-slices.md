@@ -2,7 +2,7 @@
 
 Data: 29/10/2026. Fonte única: SPEC_RunPass_MVP_v1.md. Escopo aprovado: autenticação → catálogo → rascunho → imagem → conclusão → avaliação e medalha.
 
-Estado do plano: S00 preparada/verificada e sequência S01 autorizada pelo usuário. S01 aceita pelo usuário após revisão dos três blocos conforme S01-desenho-e-contratos.md; S02, S03 e S04 implementadas localmente em revisão. S05 e S06 estão em execução local; S07–S09 não foram iniciados. Cada slice possui dependências e saída verificável. Propostas técnicas são resolvidas dentro dos slices de desenho; não exigem reaprovação de nomes de atributos. Escolhas que alterem produto, custo ou privacidade voltam ao usuário.
+Estado do plano: S00 preparada/verificada e sequência S01 autorizada pelo usuário. S01 aceita pelo usuário após revisão dos três blocos conforme S01-desenho-e-contratos.md; S02, S03 e S04 implementadas localmente em revisão. S05 está em execução, S06 e S07 estão em revisão local, S08 está em execução local e S09 entrou em preparação local sem provisionamento. Cada slice possui dependências e saída verificável. Propostas técnicas são resolvidas dentro dos slices de desenho; não exigem reaprovação de nomes de atributos. Escolhas que alterem produto, custo ou privacidade voltam ao usuário.
 
 ## Regras de execução
 
@@ -23,9 +23,9 @@ Estado do plano: S00 preparada/verificada e sequência S01 autorizada pelo usuá
 | S04 | Participação em rascunho | S03 | Em revisão — S04-rascunho-participacao.md |
 | S05 | Upload e imagem validada | S02, S04 | Em execução — backend/mobile locais validados; iPhone real e S3 pendentes |
 | S06 | Conclusão atômica, avaliação e medalha | S04, S05 | Em revisão — backend e jornada mobile locais validados |
-| S07 | Entrega de eventos, RunScore e histórico restrito | S06 | Aguardando dependências |
-| S08 | Edição, exclusão e proteção de dados | S06, S07 | Aguardando dependências |
-| S09 | Integração real em DEV e aceite da entrega | S02–S08, orçamento/autorização | Bloqueado para provisionamento |
+| S07 | Entrega de eventos, RunScore e histórico restrito | S06 | Em revisão local — consumidores, recuperação e expiração validados |
+| S08 | Edição, exclusão e proteção de dados | S06, S07 | Em execução local — backend de edição/exclusão e limpeza retomável implementado |
+| S09 | Integração real em DEV e aceite da entrega | S02–S08, orçamento/autorização | Preparação local; provisionamento bloqueado pelos gates |
 
 Não é uma decomposição de todo o MVP. Feed completo, interações sociais, wishlist, painel completo e pós-beta terão slices próprios depois; não foram removidos do escopo do produto.
 
@@ -150,3 +150,9 @@ Backend local em execução com sessão privada de 15 minutos, finalização ide
 ## Evidência S06 — 29/10/2026
 
 Conclusão local em revisão com uma única transação otimista para participação, claim, review, medalha, referência da imagem, evento durável e comando idempotente. O backend exige autodeclaração, oito notas, versão do rascunho, edição passada/não arquivada e imagem própria ou oficial válida; retry não duplica efeitos e concorrência tem um vencedor. O teste mobile vertical percorre upload sintético, imagem válida, oito notas, declaração e conclusão. Resultado: 66 testes backend e 15 Flutter, com análise estática limpa. Relatório: S06-conclusao-avaliacao-medalha.md. Integração real continua S09; sem AWS ou publicação de feed.
+
+Teste humano no simulador em 29/10/2026 confirmou preenchimento, imagem validada e mensagem de participação/medalha/avaliação registradas. A captura revelou controles de rascunho ainda visíveis após concluir; foi criado teste de regressão, reproduzida a falha e corrigida a renderização para uma tela final exclusiva. O teste passou e a correção foi reinstalada no simulador.
+
+## Evidência S07 — 01/11/2026
+
+Consumidores locais em execução para `score` e `audit`, com DELIVERY idempotente por evento/destino, contribuição vigente, soma inteira das oito notas, reconciliação da fonte atual para eventos fora de ordem, `dispatchEpoch`, confirmação final e prazo de replay sem renovação. Pendências possuem marcador durável em 16 shards e são reencontradas pelo reconciliador. Auditoria local separa comentário do evento operacional e fixa expiração de 60 dias desde a ocorrência. Cinco testes específicos passaram; relatório: S07-eventos-runscore-auditoria.md. SQS/S3, lease/fencing, carga, latência e descarte físico continuam pendentes para integração autorizada.

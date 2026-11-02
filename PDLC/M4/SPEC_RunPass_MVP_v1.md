@@ -271,3 +271,15 @@ Implementados localmente sessão/finalização/estado de upload privado, fixaç�
 ## S06 — conclusão local em revisão, 29/10/2026
 
 Implementada conclusão transacional local do rascunho com autodeclaração, oito notas, imagem válida, review, medalha com referência/versionamento fixos, claim, outbox e idempotência. Concorrência produz um único vencedor e falhas de imagem/edição preservam o rascunho. O teste Flutter vertical percorre upload sintético, validação, oito notas e conclusão. Evidências: 66 testes backend, 15 Flutter e análise limpa; limites em S06-conclusao-avaliacao-medalha.md. Consumidores/RunScore são S07; integração real é S09. Sem AWS, deploy, commit ou push.
+
+## S07 — consumidores locais em revisão, 01/11/2026
+
+Implementados consumidores locais idempotentes de score/auditoria, contribuição vigente, RunScore por soma inteira, DELIVERY por destino, epoch, prazo de replay sem renovação e marcador/reconciliador em 16 shards. Lease renovável de 60 segundos usa fencing monotônico; falhas permanecem reencontráveis com backoff. Eventos atrasados reconciliam a fonte atual; comentário fica fora do evento operacional. Limpeza ativa remove payload entregue após sete dias e lake no marco original de 60 dias; auditoria pendente vencida é descartada sem confirmação falsa. Evidências: nove testes focados e 75 testes backend em `make check`. SQS/S3/IAM e metas de latência permanecem integração S09. Sem AWS, deploy ou push.
+
+## S08 — edição e exclusão locais em execução, 01/11/2026
+
+Implementados PUT completo de review, remoção de comentário omitido, histórico restrito antes/depois, edição versionada de participação concluída, transferência de edição com recomposição do RunScore e exclusão lógica da participação. Exclusão de conta ganhou marcador e executor retomável por etapas, compensando score e enumerando registros pessoais locais antes da conclusão; bloqueio imediato e controle pseudonimizado aprovado permanecem. Evidências e limitações em S08-edicao-exclusao-privacidade.md. Bytes de objetos, serviços AWS, restore e UI mobile continuam pendentes. Sem AWS, deploy ou push.
+
+## S09 — preparação local, 01/11/2026
+
+Preparado template CloudFormation candidato para seis tabelas, buckets privados de medalhas/auditoria, filas/DLQs e alarmes, somado ao template Cognito existente. `make infra-check` valida os dois arquivos localmente. Gate, evidências e lacunas estão em S09-integracao-dev.md. Orçamento continua parcial e sem teto; conta DEV, OIDC, responsáveis e autorização de provisionamento não estão registrados. Nenhum recurso AWS foi criado e integração/aceite não foram declarados.

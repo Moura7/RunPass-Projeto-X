@@ -26,7 +26,7 @@ test:
 	PYTHONPATH=backend $(PYTHON) -m unittest discover -s backend/tests -v
 
 infra-check:
-	$(CFN_LINT) -t infra/identity.template.json -r sa-east-1
+	$(CFN_LINT) -t infra/identity.template.json infra/data.template.yaml -r sa-east-1
 
 catalog-seed:
 	PYTHONPATH=backend $(PYTHON) -m runpass.seed_catalog

@@ -19,6 +19,7 @@ from .models import (
     Eligibility,
     PatchParticipation,
     PatchProfile,
+    ReplaceReview,
     StartUpload,
 )
 from .service import Problem
@@ -184,6 +185,23 @@ def create_app(service=None, verifier=None, catalog=None, participations=None, u
             raise Unavailable()
         return participations.patch(actor, id, idempotency_key, body.model_dump(exclude_unset=True))
 
+    @app.delete("/participations/{id}", status_code=202, operation_id="deleteParticipation")
+    def delete_participation(
+        id: str,
+        actor: Actor,
+        idempotency_key: IdempotencyKey,
+        expectedVersion: int = Query(..., ge=1),
+    ):
+        if participations is None:
+            raise Unavailable()
+        return participations.delete(actor, id, idempotency_key, expectedVersion)
+
+    @app.get("/deletion-operations/{id}", operation_id="getDeletionOperation")
+    def get_deletion_operation(id: str, actor: Actor):
+        if participations is None:
+            raise Unavailable()
+        return participations.get_deletion(actor, id)
+
     @app.get("/me/participations", operation_id="listMyParticipations")
     def list_participations(
         actor: Actor,
@@ -205,6 +223,22 @@ def create_app(service=None, verifier=None, catalog=None, participations=None, u
         if participations is None:
             raise Unavailable()
         return participations.complete(actor, id, idempotency_key, body.model_dump())
+
+    @app.get("/participations/{id}/review", operation_id="getParticipationReview")
+    def get_participation_review(id: str, actor: Actor):
+        if participations is None:
+            raise Unavailable()
+        return participations.get_review(actor, id)
+
+    @app.put("/participations/{id}/review", operation_id="replaceParticipationReview")
+    def replace_participation_review(
+        id: str, body: ReplaceReview, actor: Actor, idempotency_key: IdempotencyKey
+    ):
+        if participations is None:
+            raise Unavailable()
+        return participations.replace_review(
+            actor, id, idempotency_key, body.model_dump(exclude_unset=True)
+        )
 
     @app.post("/uploads", status_code=201, operation_id="startUpload")
     def start_upload(body: StartUpload, actor: Actor, idempotency_key: IdempotencyKey):

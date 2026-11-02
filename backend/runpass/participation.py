@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from datetime import date
+from datetime import date, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -175,7 +175,14 @@ class ParticipationService:
                 raise Problem(503, "PARTICIPATION_INTEGRITY_FAILURE")
             event_id = str(uuid4())
             event_key = ("operations", pk, "EVENT#" + event_id)
+            shard = int(hashlib.sha256(event_id.encode()).hexdigest(), 16) % 16
+            work_key = (
+                "operations",
+                f"WORK#event#pending#{shard:02d}",
+                stamp(now) + "#" + event_id,
+            )
             read(event_key)
+            read(work_key)
             item.update(
                 state="completed",
                 version=item["version"] + 1,
@@ -211,11 +218,25 @@ class ParticipationService:
                 "distanceId": item["distanceId"],
                 "ratings": payload["ratings"],
                 "occurredAt": stamp(now),
+                "dispatchEpoch": 1,
+                "workPartition": work_key[1],
+                "workSort": work_key[2],
             }
             write(part_key, item)
             write(review_key, review)
             write(medal_key, medal)
             write(event_key, event)
+            write(
+                work_key,
+                {
+                    "owner": actor.subject,
+                    "eventId": event_id,
+                    "state": "pending",
+                    "nextAttemptAt": stamp(now),
+                    "workPartition": work_key[1],
+                    "workSort": work_key[2],
+                },
+            )
             write(image_key, {**image, "refs": image.get("refs", 0) + 1})
             write(claim_key, {"participationId": participation_id, "version": item["version"]})
             return self.projection(item), {"id": participation_id}
@@ -224,11 +245,283 @@ class ParticipationService:
             actor, "completeParticipation", key, payload, work, admitted=True
         )
 
+    @staticmethod
+    def review_projection(item):
+        return {
+            "participationId": item["participationId"],
+            "version": item["reviewVersion"],
+            "ratings": item["ratings"],
+            "moderationState": item["moderationState"],
+            **({"comment": item["comment"]} if "comment" in item else {}),
+        }
+
+    def get_review(self, actor, participation_id):
+        pk = "USER#" + actor.subject
+
+        def work(read, write, account, now, replay):
+            owner = read(("history", "PARTICIPATION#" + participation_id, "OWNER"))
+            part = read(("history", pk, "P#" + participation_id + "#PART"))
+            review = read(("history", pk, "P#" + participation_id + "#REVIEW"))
+            if (
+                not owner
+                or owner.get("owner") != actor.subject
+                or not part
+                or part.get("state") != "completed"
+                or not review
+            ):
+                raise Problem(404, "REVIEW_NOT_FOUND")
+            return self.review_projection(review), {}
+
+        return self.identity.transact(
+            actor, "getParticipationReview", None, {}, work, admitted=True
+        )
+
+    def replace_review(self, actor, participation_id, key, payload):
+        pk = "USER#" + actor.subject
+
+        def work(read, write, account, now, replay):
+            part_key = ("history", pk, "P#" + participation_id + "#PART")
+            review_key = ("history", pk, "P#" + participation_id + "#REVIEW")
+            owner = read(("history", "PARTICIPATION#" + participation_id, "OWNER"))
+            part, review = read(part_key), read(review_key)
+            if (
+                not owner
+                or owner.get("owner") != actor.subject
+                or not part
+                or part.get("state") != "completed"
+                or not review
+            ):
+                raise Problem(404, "REVIEW_NOT_FOUND")
+            if replay is not None:
+                return self.review_projection(review), replay
+            if review["reviewVersion"] != payload["expectedVersion"]:
+                raise Problem(409, "VERSION_CONFLICT")
+            event_id = str(uuid4())
+            event_key = ("operations", pk, "EVENT#" + event_id)
+            audit_key = ("operations", pk, "AUDIT_SOURCE#" + event_id)
+            shard = int(hashlib.sha256(event_id.encode()).hexdigest(), 16) % 16
+            work_key = (
+                "operations",
+                f"WORK#event#pending#{shard:02d}",
+                stamp(now) + "#" + event_id,
+            )
+            read(event_key)
+            read(audit_key)
+            read(work_key)
+            updated = {
+                **review,
+                "reviewVersion": review["reviewVersion"] + 1,
+                "effectVersion": review["effectVersion"] + 1,
+                "ratings": payload["ratings"],
+                "moderationState": (
+                    "pending_review" if review["moderationState"] == "invalidated" else "valid"
+                ),
+            }
+            if "comment" in payload and payload["comment"] is not None:
+                updated["comment"] = payload["comment"]
+            else:
+                updated.pop("comment", None)
+            event = {
+                "id": event_id,
+                "type": "review_replaced",
+                "state": "pending",
+                "participationId": participation_id,
+                "effectVersion": updated["effectVersion"],
+                "editionId": part["editionId"],
+                "distanceId": part["distanceId"],
+                "occurredAt": stamp(now),
+                "dispatchEpoch": 1,
+                "workPartition": work_key[1],
+                "workSort": work_key[2],
+            }
+            write(review_key, updated)
+            write(event_key, event)
+            write(
+                audit_key,
+                {
+                    "eventId": event_id,
+                    "participationId": participation_id,
+                    "occurredAt": stamp(now),
+                    "before": self.review_projection(review),
+                    "after": self.review_projection(updated),
+                },
+            )
+            write(
+                work_key,
+                {
+                    "owner": actor.subject,
+                    "eventId": event_id,
+                    "state": "pending",
+                    "nextAttemptAt": stamp(now),
+                    "workPartition": work_key[1],
+                    "workSort": work_key[2],
+                },
+            )
+            return self.review_projection(updated), {"id": participation_id}
+
+        return self.identity.transact(
+            actor, "replaceParticipationReview", key, payload, work, admitted=True
+        )
+
+    def delete(self, actor, participation_id, key, expected_version):
+        pk = "USER#" + actor.subject
+        payload = {"expectedVersion": expected_version}
+
+        def work(read, write, account, now, replay):
+            part_key = ("history", pk, "P#" + participation_id + "#PART")
+            review_key = ("history", pk, "P#" + participation_id + "#REVIEW")
+            medal_key = ("history", pk, "P#" + participation_id + "#MEDAL")
+            owner = read(("history", "PARTICIPATION#" + participation_id, "OWNER"))
+            part, review, medal = read(part_key), read(review_key), read(medal_key)
+            if not owner or owner.get("owner") != actor.subject or not part:
+                raise Problem(404, "PARTICIPATION_NOT_FOUND")
+            if replay is not None:
+                return {
+                    "operationId": replay["operationId"],
+                    "state": "pending",
+                    "publiclyHidden": True,
+                }, replay
+            if part.get("state") not in {"draft", "completed"}:
+                raise Problem(404, "PARTICIPATION_NOT_FOUND")
+            if part["version"] != expected_version:
+                raise Problem(409, "VERSION_CONFLICT")
+            operation_id, event_id = str(uuid4()), str(uuid4())
+            job_key = ("operations", pk, "JOB#" + operation_id)
+            event_key = ("operations", pk, "EVENT#" + event_id)
+            audit_key = ("operations", pk, "AUDIT_SOURCE#" + event_id)
+            shard = int(hashlib.sha256(event_id.encode()).hexdigest(), 16) % 16
+            work_key = (
+                "operations",
+                f"WORK#event#pending#{shard:02d}",
+                stamp(now) + "#" + event_id,
+            )
+            for item_key in (job_key, event_key, audit_key, work_key):
+                read(item_key)
+            claim_key = ("history", pk, "EDITION#" + part["editionId"] + "#CLAIM")
+            claim = read(claim_key)
+            if not claim or claim.get("participationId") != participation_id:
+                raise Problem(503, "PARTICIPATION_INTEGRITY_FAILURE")
+            deleted = {
+                **part,
+                "state": "deleted",
+                "version": part["version"] + 1,
+                "deletedAt": stamp(now),
+                "updatedAt": stamp(now),
+                "publishToFeed": False,
+            }
+            write(part_key, deleted)
+            write(claim_key, None)
+            if review:
+                write(
+                    review_key,
+                    {
+                        **review,
+                        "reviewVersion": review["reviewVersion"] + 1,
+                        "effectVersion": review["effectVersion"] + 1,
+                        "moderationState": "invalidated",
+                    },
+                )
+            if medal:
+                image_key = (
+                    (
+                        "operations",
+                        pk,
+                        "IMAGE#" + medal["imageReference"],
+                    )
+                    if medal["imageOrigin"] == "runner"
+                    else (
+                        "operations",
+                        "EDITION#" + part["editionId"],
+                        "IMAGE#" + medal["imageReference"],
+                    )
+                )
+                image = read(image_key)
+                if image:
+                    write(image_key, {**image, "refs": max(0, image.get("refs", 0) - 1)})
+            event = {
+                "id": event_id,
+                "type": "participation_deleted",
+                "state": "pending",
+                "participationId": participation_id,
+                "effectVersion": (review or {}).get("effectVersion", 0) + 1,
+                "editionId": part["editionId"],
+                "distanceId": part["distanceId"],
+                "occurredAt": stamp(now),
+                "dispatchEpoch": 1,
+                "workPartition": work_key[1],
+                "workSort": work_key[2],
+            }
+            write(event_key, event)
+            write(
+                audit_key,
+                {
+                    "eventId": event_id,
+                    "participationId": participation_id,
+                    "occurredAt": stamp(now),
+                    "before": self.review_projection(review) if review else None,
+                    "after": None,
+                },
+            )
+            write(
+                work_key,
+                {
+                    "owner": actor.subject,
+                    "eventId": event_id,
+                    "state": "pending",
+                    "nextAttemptAt": stamp(now),
+                    "workPartition": work_key[1],
+                    "workSort": work_key[2],
+                },
+            )
+            write(
+                job_key,
+                {
+                    "operationId": operation_id,
+                    "participationId": participation_id,
+                    "state": "pending",
+                    "type": "erase_participation",
+                    "publiclyHidden": True,
+                    "acceptedAt": stamp(now),
+                    "dueAt": stamp(now + timedelta(days=7)),
+                },
+            )
+            receipt = {"operationId": operation_id}
+            return {
+                "operationId": operation_id,
+                "state": "pending",
+                "publiclyHidden": True,
+            }, receipt
+
+        return self.identity.transact(
+            actor, "deleteParticipation", key, payload, work, admitted=True
+        )
+
+    def get_deletion(self, actor, operation_id):
+        def work(read, write, account, now, replay):
+            job = read(("operations", "USER#" + actor.subject, "JOB#" + operation_id))
+            if not job or job.get("type") != "erase_participation":
+                raise Problem(404, "DELETION_OPERATION_NOT_FOUND")
+            return {
+                "operationId": operation_id,
+                "state": job["state"],
+                "publiclyHidden": True,
+            }, {}
+
+        return self.identity.transact(actor, "getDeletionOperation", None, {}, work, admitted=True)
+
     def patch(self, actor, participation_id, key, payload):
         current = self.get(actor, participation_id)
         edition_id = payload.get("editionId", current["editionId"])
         distance_id = payload.get("distanceId", current["distanceId"])
-        observed = self.catalog.require_draftable(actor, edition_id, distance_id)
+        catalog_changed = (edition_id, distance_id) != (
+            current["editionId"],
+            current["distanceId"],
+        )
+        observed = (
+            self.catalog.require_draftable(actor, edition_id, distance_id)
+            if catalog_changed
+            else None
+        )
         pk = "USER#" + actor.subject
 
         def work(read, write, account, now, replay):
@@ -239,11 +532,12 @@ class ParticipationService:
                 raise Problem(404, "PARTICIPATION_NOT_FOUND")
             if replay is not None:
                 return self.projection(item), replay
-            if item.get("state") != "draft":
-                raise Problem(409, "PARTICIPATION_NOT_DRAFT")
+            if item.get("state") not in {"draft", "completed"}:
+                raise Problem(404, "PARTICIPATION_NOT_FOUND")
             if item["version"] != payload["expectedVersion"]:
                 raise Problem(409, "VERSION_CONFLICT")
-            self._catalog_guard(read, edition_id, observed["version"])
+            if observed:
+                self._catalog_guard(read, edition_id, observed["version"])
             old_edition = item["editionId"]
             if edition_id != old_edition:
                 new_claim = ("history", pk, "EDITION#" + edition_id + "#CLAIM")
@@ -281,10 +575,71 @@ class ParticipationService:
                     item.pop(field, None)
                 else:
                     item[field] = payload[field]
-            item["catalogVersion"] = observed["version"]
+            if observed:
+                item["catalogVersion"] = observed["version"]
             item["version"] += 1
             item["updatedAt"] = stamp(now)
             write(part_key, item)
+            if item["state"] == "completed" and catalog_changed:
+                review_key = ("history", pk, "P#" + participation_id + "#REVIEW")
+                review = read(review_key)
+                if not review:
+                    raise Problem(503, "PARTICIPATION_INTEGRITY_FAILURE")
+                updated_review = {
+                    **review,
+                    "editionId": edition_id,
+                    "distanceId": distance_id,
+                    "effectVersion": review["effectVersion"] + 1,
+                }
+                event_id = str(uuid4())
+                event_key = ("operations", pk, "EVENT#" + event_id)
+                audit_key = ("operations", pk, "AUDIT_SOURCE#" + event_id)
+                shard = int(hashlib.sha256(event_id.encode()).hexdigest(), 16) % 16
+                work_key = (
+                    "operations",
+                    f"WORK#event#pending#{shard:02d}",
+                    stamp(now) + "#" + event_id,
+                )
+                for event_item_key in (event_key, audit_key, work_key):
+                    read(event_item_key)
+                write(review_key, updated_review)
+                write(
+                    event_key,
+                    {
+                        "id": event_id,
+                        "type": "participation_transferred",
+                        "state": "pending",
+                        "participationId": participation_id,
+                        "effectVersion": updated_review["effectVersion"],
+                        "editionId": edition_id,
+                        "distanceId": distance_id,
+                        "occurredAt": stamp(now),
+                        "dispatchEpoch": 1,
+                        "workPartition": work_key[1],
+                        "workSort": work_key[2],
+                    },
+                )
+                write(
+                    audit_key,
+                    {
+                        "eventId": event_id,
+                        "participationId": participation_id,
+                        "occurredAt": stamp(now),
+                        "before": self.review_projection(review),
+                        "after": self.review_projection(updated_review),
+                    },
+                )
+                write(
+                    work_key,
+                    {
+                        "owner": actor.subject,
+                        "eventId": event_id,
+                        "state": "pending",
+                        "nextAttemptAt": stamp(now),
+                        "workPartition": work_key[1],
+                        "workSort": work_key[2],
+                    },
+                )
             return self.projection(item), {"id": participation_id}
 
         return self.identity.transact(
