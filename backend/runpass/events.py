@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from .service import Problem, stamp
-from .store import Conflict
+from .store import Conflict, iter_partition
 
 MANDATORY = ("score", "audit")
 LEASE_SECONDS = 60
@@ -14,8 +14,8 @@ AUDIT_RETENTION_DAYS = 60
 
 
 class EventProcessor:
-    def __init__(self, identity):
-        self.identity, self.store = identity, identity.store
+    def __init__(self, identity, audit_sink=None):
+        self.identity, self.store, self.audit_sink = identity, identity.store, audit_sink
 
     @staticmethod
     def score_projection(item):
@@ -160,8 +160,9 @@ class EventProcessor:
             )
             leases[consumer] = self.acquire_lease(consumer, worker_id, token)
         for shard in range(16):
-            rows, _ = self.store.query("operations", f"WORK#event#pending#{shard:02d}", limit=limit)
-            for _, marker in rows:
+            for _, marker in iter_partition(
+                self.store, "operations", f"WORK#event#pending#{shard:02d}"
+            ):
                 if marker.get("state") != "pending":
                     continue
                 if self.identity.clock() < self._parse(marker["nextAttemptAt"]):
@@ -206,8 +207,9 @@ class EventProcessor:
         removed, audit_expired = 0, 0
         now = self.identity.clock()
         for shard in range(16):
-            rows, _ = self.store.query("operations", f"WORK#event#pending#{shard:02d}", limit=limit)
-            for _, marker in rows:
+            for _, marker in iter_partition(
+                self.store, "operations", f"WORK#event#pending#{shard:02d}"
+            ):
                 owner, event_id = marker.get("owner"), marker.get("eventId")
                 if not owner or not event_id:
                     continue
@@ -275,6 +277,9 @@ class EventProcessor:
             "LAKE#" + marker["eventId"],
         )
         expected = {work_key: self.store.get(work_key), lake_key: self.store.get(lake_key)}
+        object_key = (expected[lake_key] or {}).get("objectKey")
+        if self.audit_sink is not None and object_key:
+            self.audit_sink.delete(object_key)
         try:
             self.store.commit(expected, {work_key: None, lake_key: None})
         except Conflict as error:
@@ -358,8 +363,17 @@ class EventProcessor:
                 }
             ),
         }
-        if lake and {k: v for k, v in lake.items() if k != "_rev"} != payload:
+        record = payload
+        if self.audit_sink is not None:
+            # Comments stay only in the object; the row is the locator erasure needs to find it.
+            record = {
+                "eventId": event["id"],
+                "occurredAt": event["occurredAt"],
+                "expiresAt": payload["expiresAt"],
+                "objectKey": self.audit_sink.put(event["id"], event["occurredAt"], payload),
+            }
+        if lake and {k: v for k, v in lake.items() if k != "_rev"} != record:
             raise Problem(409, "AUDIT_COLLISION")
-        writes[lake_key] = payload
+        writes[lake_key] = record
         if audit_source:
             writes[audit_key] = None

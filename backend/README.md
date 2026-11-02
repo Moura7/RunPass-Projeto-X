@@ -13,6 +13,10 @@ Implementação local de perfil, identidade e admissão. Setup/testes na raiz: `
 - `runpass/participation.py`: rascunho privado, reserva por edição, versão esperada, idempotência e paginação do titular; sem conclusão ou efeitos públicos.
 - `tests/`: regras, concorrência local, JWT assinado, fluxo HTTP e requests DynamoDB interceptadas por Stubber.
 
+## Lambda
+
+`runpass/lambda_entry.py` contém os handlers da API, dos consumidores, do publicador e da manutenção; clientes e segredos só carregam no primeiro uso. `runpass/aws_adapters.py` implementa S3 e remoção no Cognito. `make lambda-package` gera o zip para `python3.12`/arm64 sem enviá-lo. Dependências do pacote: `requirements-lambda.in`.
+
 ## Execução e configuração
 
 ```sh

@@ -80,9 +80,9 @@ class CognitoDirectory:
 class JwksProvider:
     """Only the configured issuer is contacted; token-supplied jku/x5u are ignored."""
 
-    def __init__(self, issuer):
-        if not re.fullmatch(
-            r"https://cognito-idp[.]sa-east-1[.]amazonaws[.]com/sa-east-1_[A-Za-z0-9]+", issuer
+    def __init__(self, issuer, region):
+        if not re.fullmatch(r"[a-z]{2}-[a-z]+-[0-9]", region) or not re.fullmatch(
+            rf"https://cognito-idp[.]{region}[.]amazonaws[.]com/{region}_[A-Za-z0-9]+", issuer
         ):
             raise ValueError("Expected configured Cognito issuer")
         self.client = jwt.PyJWKClient(issuer.rstrip("/") + "/.well-known/jwks.json", timeout=3)

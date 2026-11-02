@@ -3,12 +3,30 @@
 from copy import deepcopy
 
 from .service import Problem, stamp
-from .store import Conflict
+from .store import Conflict, iter_partition
 
 
 class ErasureProcessor:
-    def __init__(self, identity):
-        self.identity, self.store = identity, identity.store
+    """`external` holds destinations with delete_owner(owner), such as the identity directory."""
+
+    def __init__(self, identity, blobs=None, external=(), audit=None):
+        self.identity, self.store, self.blobs = identity, identity.store, blobs
+        self.external, self.audit = external, audit
+
+    def run_pending(self, max_steps=200, limit=50):
+        """Advance accepted jobs; unfinished ones stay durable and resume on the next run."""
+        completed, pending = 0, 0
+        for shard in range(16):
+            for _, marker in iter_partition(
+                self.store, "operations", f"WORK#erase_account#pending#{shard}"
+            ):
+                state = "pending"
+                while state != "completed" and max_steps > 0:
+                    max_steps -= 1
+                    state = self.step(marker["owner"], marker["operationId"], limit)["state"]
+                completed += state == "completed"
+                pending += state != "completed"
+        return {"completed": completed, "pending": pending}
 
     def step(self, owner, operation_id, limit=50):
         pk = "USER#" + owner
@@ -53,6 +71,13 @@ class ErasureProcessor:
                 continue
         raise Problem(503, "CONCURRENT_RETRY_REQUIRED")
 
+    def _delete_audit_object(self, key, item):
+        # EVENT rows also count: an object may exist if the worker died before writing its locator.
+        if key[2].startswith("LAKE#") and item.get("objectKey"):
+            self.audit.delete(item["objectKey"])
+        elif key[2].startswith("EVENT#") and item.get("occurredAt"):
+            self.audit.delete(self.audit.key_for(item["id"], item["occurredAt"]))
+
     def _update_job(self, key, job, stage):
         updated = {**job, "stage": stage, "updatedAt": stamp(self.identity.clock())}
         try:
@@ -76,19 +101,19 @@ class ErasureProcessor:
                 break
         if len(candidates) < limit:
             for shard in range(16):
-                rows, _ = self.store.query(
-                    "operations", f"WORK#event#pending#{shard:02d}", limit=limit
-                )
-                for sk, item in rows:
+                partition = f"WORK#event#pending#{shard:02d}"
+                # Markers are shared by all owners, so an unpaged read could miss this owner's.
+                for sk, item in iter_partition(self.store, "operations", partition):
                     if item.get("owner") == owner:
-                        candidates.append(
-                            (("operations", f"WORK#event#pending#{shard:02d}", sk), item)
-                        )
+                        candidates.append((("operations", partition, sk), item))
                         if len(candidates) >= limit:
                             break
                 if len(candidates) >= limit:
                     break
         if candidates:
+            if self.audit is not None:
+                for key, item in candidates:
+                    self._delete_audit_object(key, item)
             expected = {key: item for key, item in candidates}
             writes = {key: None for key, _ in candidates}
             for key, item in candidates:
@@ -101,6 +126,11 @@ class ErasureProcessor:
             except Conflict as error:
                 raise Problem(503, "CONCURRENT_RETRY_REQUIRED") from error
             return {"state": "pending", "stage": "erase"}
+
+        if self.blobs is not None:
+            self.blobs.delete_owner(owner)
+        for destination in self.external:
+            destination.delete_owner(owner)
 
         work_key = ("operations", job["workPK"], job["workSK"])
         username_key = (

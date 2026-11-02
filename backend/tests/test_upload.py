@@ -1,8 +1,11 @@
 import io
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
+from runpass.erasure import ErasureProcessor
 from runpass.identity import Principal
 from runpass.service import IdentityService, Problem
 from runpass.store import MemoryStore
@@ -66,6 +69,21 @@ class UploadTests(unittest.TestCase):
         image_item = self.store.get(("operations", "USER#owner", "IMAGE#" + reference))
         self.assertEqual((image_item["state"], image_item["refs"]), ("valid", 0))
 
+    def test_account_erasure_removes_original_and_derived_personal_bytes(self):
+        session, _ = self.start_and_put(jpeg())
+        result = self.service.finalize(self.actor, session["uploadId"], "finish")
+        self.assertIn(result["imageReference"], self.blobs.derived)
+        self.assertIn(session["uploadId"], self.blobs.versions)
+        receipt = self.identity.delete_account(self.actor, "erase")
+        processor = ErasureProcessor(self.identity, self.blobs)
+        for _ in range(20):
+            outcome = processor.step("owner", receipt["operationId"], limit=3)
+            if outcome["state"] == "completed":
+                break
+        self.assertEqual(outcome, {"state": "completed"})
+        self.assertEqual(self.blobs.versions, {})
+        self.assertEqual(self.blobs.derived, {})
+
     def test_finalize_pins_version_even_if_url_is_overwritten(self):
         original = jpeg("red")
         session, first_version = self.start_and_put(original)
@@ -115,7 +133,9 @@ class UploadTests(unittest.TestCase):
         other = self.admit("other")
         original_head = self.blobs.head
         head_calls = []
-        self.blobs.head = lambda upload_id: head_calls.append(upload_id) or original_head(upload_id)
+        self.blobs.head = lambda upload_id, owner: head_calls.append(upload_id) or original_head(
+            upload_id, owner
+        )
         with self.assertRaises(Problem) as error:
             self.service.get(other, session["uploadId"])
         self.assertEqual(error.exception.code, "UPLOAD_NOT_FOUND")
@@ -149,6 +169,51 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(result["state"], "failed")
         self.assertEqual(result["reasonCode"], "PIXEL_LIMIT_EXCEEDED")
         self.assertEqual(self.blobs.derived, {})
+
+    def test_decompression_bomb_fails_closed_instead_of_crashing(self):
+        output = io.BytesIO()
+        Image.new("1", (14000, 14000)).save(output, "PNG")
+        session, _ = self.start_and_put(output.getvalue(), "image/png", "bomb")
+        result = self.service.finalize(self.actor, session["uploadId"], "bomb-finish")
+        self.assertEqual(
+            (result["state"], result["reasonCode"]), ("failed", "PIXEL_LIMIT_EXCEEDED")
+        )
+
+    def test_pixel_limit_is_checked_before_decoding(self):
+        output = io.BytesIO()
+        Image.new("1", (5001, 5000)).save(output, "PNG")
+        with patch.object(Image.Image, "load", side_effect=AssertionError("decoded")):
+            with self.assertRaises(Problem) as error:
+                UploadService.sanitize(output.getvalue(), "image/png")
+        self.assertEqual(error.exception.code, "PIXEL_LIMIT_EXCEEDED")
+
+    def test_multi_picture_jpeg_is_accepted_as_jpeg(self):
+        output = io.BytesIO()
+        Image.new("RGB", (40, 20), "red").save(
+            output, "MPO", save_all=True, append_images=[Image.new("RGB", (40, 20), "blue")]
+        )
+        data, content_type = UploadService.sanitize(output.getvalue(), "image/jpeg")
+        derived = Image.open(io.BytesIO(data))
+        self.assertEqual((content_type, derived.format), ("image/jpeg", "JPEG"))
+
+    def test_free_text_metadata_is_not_preserved(self):
+        output = io.BytesIO()
+        Image.new("RGB", (40, 20), "red").save(output, "JPEG", comment=b"private-comment")
+        data, _ = UploadService.sanitize(output.getvalue(), "image/jpeg")
+        self.assertNotIn(b"private-comment", data)
+
+        info = PngInfo()
+        info.add_text("Location", "private-text")
+        output = io.BytesIO()
+        Image.new("RGB", (40, 20), "red").save(output, "PNG", pnginfo=info)
+        data, _ = UploadService.sanitize(output.getvalue(), "image/png")
+        self.assertNotIn(b"private-text", data)
+
+    def test_transparent_palette_png_keeps_transparency(self):
+        output = io.BytesIO()
+        Image.new("P", (40, 20), 0).save(output, "PNG", transparency=0)
+        data, _ = UploadService.sanitize(output.getvalue(), "image/png")
+        self.assertIn("transparency", Image.open(io.BytesIO(data)).info)
 
     def test_start_is_idempotent_and_rejects_unadmitted(self):
         body = {"contentType": "image/jpeg", "sizeBytes": 10}

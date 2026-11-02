@@ -25,6 +25,16 @@ class Store(Protocol):
     def query(self, table, pk, *, lower=None, upper=None, prefix=None, after=None, limit=20): ...
 
 
+def iter_partition(store, table, pk, page_size=100):
+    """Every row of one partition; callers must not treat a single page as the whole partition."""
+    after = None
+    while True:
+        rows, after = store.query(table, pk, after=after, limit=page_size)
+        yield from rows
+        if after is None:
+            return
+
+
 class MemoryStore:
     """Local, single-process adapter. Its lock is not evidence of DynamoDB concurrency."""
 

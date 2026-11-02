@@ -14,6 +14,8 @@ from .store import Conflict
 
 MAX_PIXELS = 25_000_000
 TARGET_BYTES = 1_000_000
+# MPO is the multi-frame JPEG container written by many phone cameras.
+CONTENT_TYPES = {"JPEG": "image/jpeg", "MPO": "image/jpeg", "PNG": "image/png"}
 
 
 class MemoryBlobStore:
@@ -23,7 +25,7 @@ class MemoryBlobStore:
         self.secret = os.urandom(32).hex()
         self.versions, self.derived = {}, {}
 
-    def issue(self, upload_id, content_type):
+    def issue(self, upload_id, content_type, owner):
         return {
             "uploadUrl": f"memory://private/{upload_id}?capability={self.secret}",
             "uploadMethod": "PUT",
@@ -39,7 +41,7 @@ class MemoryBlobStore:
         )
         return version
 
-    def head(self, upload_id):
+    def head(self, upload_id, owner):
         rows = self.versions.get(upload_id, [])
         if not rows:
             raise Problem(409, "OBJECT_NOT_UPLOADED")
@@ -50,17 +52,33 @@ class MemoryBlobStore:
             "contentType": row["contentType"],
         }
 
-    def read(self, upload_id, version):
+    def read(self, upload_id, version, owner):
         for row in self.versions.get(upload_id, []):
             if row["version"] == version:
                 return row["data"]
         raise Problem(503, "SOURCE_VERSION_UNAVAILABLE")
 
-    def write_derived(self, reference, data, content_type):
-        value = {"data": bytes(data), "contentType": content_type}
+    def write_derived(self, reference, data, content_type, owner):
+        value = {"data": bytes(data), "contentType": content_type, "owner": owner}
         if reference in self.derived and self.derived[reference] != value:
             raise Problem(503, "DERIVED_COLLISION")
         self.derived[reference] = value
+
+    def delete_owner(self, owner):
+        """Active local deletion of originals, versions and derived personal bytes."""
+        removed = 0
+        for upload_id, rows in list(self.versions.items()):
+            kept = [row for row in rows if row["owner"] != owner]
+            removed += len(rows) - len(kept)
+            if kept:
+                self.versions[upload_id] = kept
+            else:
+                self.versions.pop(upload_id, None)
+        for reference, item in list(self.derived.items()):
+            if item.get("owner") == owner:
+                self.derived.pop(reference, None)
+                removed += 1
+        return removed
 
 
 class UploadService:
@@ -102,14 +120,14 @@ class UploadService:
         return {
             "uploadId": item["uploadId"],
             "expiresAt": item["expiresAt"],
-            **self.blobs.issue(item["uploadId"], item["contentType"]),
+            **self.blobs.issue(item["uploadId"], item["contentType"], actor.subject),
         }
 
     def finalize(self, actor, upload_id, key):
         # Authorize the owner before consulting blob metadata. An opaque upload id
         # is not authorization and must not allow probing another user's object.
         self.get(actor, upload_id)
-        head, pk = self.blobs.head(upload_id), "USER#" + actor.subject
+        head, pk = self.blobs.head(upload_id, actor.subject), "USER#" + actor.subject
 
         def work(read, write, account, now, replay):
             ukey = ("operations", pk, "UPLOAD#" + upload_id)
@@ -153,15 +171,20 @@ class UploadService:
     def sanitize(source, declared_type):
         try:
             image = Image.open(io.BytesIO(source))
+            actual_type = CONTENT_TYPES.get(image.format)
+            if actual_type != declared_type:
+                raise Problem(422, "FORMAT_MISMATCH")
+            # A tiny file can declare huge dimensions, so check before decoding allocates memory.
+            if image.width * image.height > MAX_PIXELS:
+                raise Problem(422, "PIXEL_LIMIT_EXCEEDED")
             image.load()
-        except (UnidentifiedImageError, OSError, ValueError) as error:
+        except Image.DecompressionBombError as error:
+            raise Problem(422, "PIXEL_LIMIT_EXCEEDED") from error
+        except (UnidentifiedImageError, OSError, ValueError, SyntaxError) as error:
             raise Problem(422, "INVALID_IMAGE") from error
-        actual_type = {"JPEG": "image/jpeg", "PNG": "image/png"}.get(image.format)
-        if actual_type != declared_type:
-            raise Problem(422, "FORMAT_MISMATCH")
-        if image.width * image.height > MAX_PIXELS:
-            raise Problem(422, "PIXEL_LIMIT_EXCEEDED")
         image = ImageOps.exif_transpose(image)
+        # Pillow re-saves some info entries, such as the JPEG comment, unless they are removed.
+        image.info = {k: v for k, v in image.info.items() if k == "transparency"}
         image.thumbnail((5000, 5000))
         if actual_type == "image/jpeg":
             image = image.convert("RGB")
@@ -198,7 +221,8 @@ class UploadService:
             else:
                 try:
                     derived, actual_type = self.sanitize(
-                        self.blobs.read(upload_id, item["sourceVersion"]), item["contentType"]
+                        self.blobs.read(upload_id, item["sourceVersion"], owner),
+                        item["contentType"],
                     )
                 except Problem as error:
                     if error.status != 422:
@@ -217,7 +241,7 @@ class UploadService:
                 )
             else:
                 reference = "img_" + hashlib.sha256((owner + ":" + upload_id).encode()).hexdigest()
-                self.blobs.write_derived(reference, derived, actual_type)
+                self.blobs.write_derived(reference, derived, actual_type, owner)
                 image_key = ("operations", pk, "IMAGE#" + reference)
                 expected[image_key] = self.store.get(image_key)
                 if expected[image_key] is not None:

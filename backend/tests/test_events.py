@@ -4,13 +4,14 @@ from pathlib import Path
 from uuid import uuid4
 
 from cryptography.fernet import Fernet
+from dynamo_fake import SerializingDynamoStore
 from runpass.catalog import CatalogService, seed_synthetic
 from runpass.erasure import ErasureProcessor
 from runpass.events import EventProcessor
 from runpass.identity import Principal
 from runpass.participation import ParticipationService
 from runpass.service import IdentityService, Problem, stamp
-from runpass.store import MemoryStore
+from runpass.store import MemoryStore, Unavailable
 
 ROOT = Path(__file__).resolve().parents[2]
 NOW = datetime(2026, 10, 28, 15, tzinfo=timezone.utc)
@@ -29,15 +30,21 @@ RATINGS = {
 }
 
 
-class EventProcessorTests(unittest.TestCase):
+class EventFixture(unittest.TestCase):
+    def make_store(self):
+        return MemoryStore()
+
+    def seed_catalog(self, catalog):
+        seed_synthetic(catalog, ROOT / "backend/fixtures/catalog.synthetic.json")
+
     def setUp(self):
         self.now = NOW
-        self.store = MemoryStore()
+        self.store = self.make_store()
         self.identity = IdentityService(
             self.store, b"events-test-hmac-key-at-least-32", lambda: self.now
         )
         catalog = CatalogService(self.identity, Fernet.generate_key())
-        seed_synthetic(catalog, ROOT / "backend/fixtures/catalog.synthetic.json")
+        self.seed_catalog(catalog)
         self.participations = ParticipationService(self.identity, catalog, Fernet.generate_key())
         self.processor = EventProcessor(self.identity)
         self.actor = Principal("owner", True)
@@ -85,6 +92,8 @@ class EventProcessorTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         return draft, events[0]
 
+
+class EventProcessorTests(EventFixture):
     def test_duplicate_delivery_is_idempotent_and_score_uses_integer_sum(self):
         _, event = self.complete()
         first = self.processor.deliver("owner", event["id"], "score")
@@ -378,6 +387,80 @@ class EventProcessorTests(unittest.TestCase):
         )
         self.assertEqual(after, before)
 
+    def fill_shard_with_foreign_markers(self, partition, count):
+        for index in range(count):
+            key = ("operations", partition, f"0000-{index:04d}")
+            self.store.commit(
+                {key: None},
+                {
+                    key: {
+                        "owner": "someone-else",
+                        "eventId": f"foreign-{index}",
+                        "state": "completed",
+                        "nextAttemptAt": stamp(NOW),
+                    }
+                },
+            )
+
+    def test_reconcile_reaches_pending_marker_behind_completed_markers(self):
+        _, event = self.complete()
+        self.fill_shard_with_foreign_markers(event["workPartition"], 120)
+        self.assertEqual(self.processor.reconcile(limit=100)["processed"], 1)
+        self.assertEqual(self.processor.get_score("synthetic-sp-2024")["reviewCount"], 1)
+
+    def test_erasure_removes_owner_marker_behind_a_full_page(self):
+        _, event = self.complete()
+        self.fill_shard_with_foreign_markers(event["workPartition"], 120)
+        receipt = self.identity.delete_account(self.actor, "erase-account")
+        erasure = ErasureProcessor(self.identity)
+        for _ in range(30):
+            if erasure.step("owner", receipt["operationId"], limit=50)["state"] == "completed":
+                break
+        self.assertFalse(
+            [
+                sk
+                for (table, pk, sk), item in self.store.items.items()
+                if table == "operations"
+                and pk.startswith("WORK#event#pending#")
+                and item.get("owner") == "owner"
+            ]
+        )
+
+    def test_erasure_deletes_external_accounts_before_completing_and_retries_on_failure(self):
+        class Directory:
+            def __init__(self):
+                self.calls, self.fail = [], True
+
+            def delete_owner(self, owner):
+                self.calls.append(owner)
+                if self.fail:
+                    raise Unavailable()
+
+        directory = Directory()
+        receipt = self.identity.delete_account(self.actor, "erase-account")
+        erasure = ErasureProcessor(self.identity, external=(directory,))
+        with self.assertRaises(Unavailable):
+            for _ in range(10):
+                erasure.step("owner", receipt["operationId"])
+        self.assertIsNotNone(
+            self.store.get(("operations", "USER#owner", "JOB#" + receipt["operationId"]))
+        )
+        directory.fail = False
+        for _ in range(10):
+            if erasure.step("owner", receipt["operationId"])["state"] == "completed":
+                break
+        self.assertIn("owner", directory.calls)
+        self.assertIsNone(
+            self.store.get(("operations", "USER#owner", "JOB#" + receipt["operationId"]))
+        )
+
+    def test_run_pending_finishes_accepted_erasures_and_is_quiet_when_empty(self):
+        self.identity.delete_account(self.actor, "erase-account")
+        erasure = ErasureProcessor(self.identity)
+        self.assertEqual(erasure.run_pending(), {"completed": 1, "pending": 0})
+        self.assertEqual(erasure.run_pending(), {"completed": 0, "pending": 0})
+        self.assertFalse([key for key in self.store.items if key[1] == "USER#owner"])
+
     def test_account_erasure_retries_stages_and_removes_personal_destinations(self):
         draft, _ = self.complete()
         self.processor.reconcile()
@@ -411,3 +494,85 @@ class EventProcessorTests(unittest.TestCase):
         )
         self.assertIsNotNone(self.store.get(self.identity.erasure("owner")))
         self.assertEqual(self.store.get(("identity", "BETA#v1", "CONTROL"))["count"], 1)
+
+
+class AuditSinkFlowTests(EventFixture):
+    class Sink:
+        def __init__(self):
+            self.objects = {}
+
+        def key_for(self, event_id, occurred_at):
+            return f"dev/{occurred_at[:10]}/{event_id}.json"
+
+        def put(self, event_id, occurred_at, payload):
+            key = self.key_for(event_id, occurred_at)
+            self.objects[key] = payload
+            return key
+
+        def delete(self, key):
+            self.objects.pop(key, None)
+
+    def setUp(self):
+        super().setUp()
+        self.sink = self.Sink()
+        self.processor = EventProcessor(self.identity, self.sink)
+
+    def lake_row(self, event):
+        return self.store.get(("operations", "USER#owner", "LAKE#" + event["id"]))
+
+    def test_comment_lives_only_in_the_object_and_the_row_is_a_locator(self):
+        _, event = self.complete()
+        self.processor.deliver("owner", event["id"], "audit")
+        row = self.lake_row(event)
+        self.assertNotIn("after", row)
+        self.assertEqual(
+            self.sink.objects[row["objectKey"]]["after"]["comment"],
+            "Comentário privado de auditoria",
+        )
+
+    def test_account_erasure_removes_delivered_and_orphaned_audit_objects(self):
+        _, event = self.complete()
+        self.processor.deliver("owner", event["id"], "audit")
+        orphan_id = str(uuid4())
+        orphan = self.sink.put(orphan_id, event["occurredAt"], {"after": {"comment": "orfao"}})
+        self.assertIn(orphan, self.sink.objects)
+        event_key = ("operations", "USER#owner", "EVENT#" + orphan_id)
+        self.store.commit(
+            {event_key: None},
+            {event_key: {"id": orphan_id, "occurredAt": event["occurredAt"]}},
+        )
+        receipt = self.identity.delete_account(self.actor, "erase-account")
+        erasure = ErasureProcessor(self.identity, audit=self.sink)
+        for _ in range(30):
+            if erasure.step("owner", receipt["operationId"])["state"] == "completed":
+                break
+        self.assertEqual(self.sink.objects, {})
+
+    def test_audit_locator_expiry_removes_the_object(self):
+        _, event = self.complete()
+        self.processor.reconcile()
+        self.assertEqual(len(self.sink.objects), 1)
+        self.now += timedelta(days=8)
+        self.processor.expire_payloads()
+        self.assertEqual(len(self.sink.objects), 1)
+        self.now = NOW + timedelta(days=61)
+        self.processor.expire_payloads()
+        self.assertEqual(self.sink.objects, {})
+        self.assertIsNone(self.lake_row(event))
+
+
+class EventProcessorOnSerializedDynamoShapeTests(EventProcessorTests):
+    """Same rules through DynamoStore, where numbers come back as Decimal and floats are rejected."""
+
+    def make_store(self):
+        return SerializingDynamoStore()
+
+    def seed_catalog(self, catalog):
+        # seed_synthetic refuses non-memory stores on purpose, so its rows are copied over.
+        source = IdentityService(MemoryStore(), b"events-test-hmac-key-at-least-32", lambda: NOW)
+        seed_synthetic(
+            CatalogService(source, Fernet.generate_key()),
+            ROOT / "backend/fixtures/catalog.synthetic.json",
+        )
+        for key, item in source.store.items.items():
+            self.store.commit({key: None}, {key: item})
