@@ -321,8 +321,63 @@ class DemoTransport {
         ..['state'] = 'completed'
         ..['version'] = (draft['version'] as int) + 1
         ..['medalImageReference'] = reference
-        ..['publishToFeed'] = data['publishToFeed'];
+        ..['publishToFeed'] = data['publishToFeed']
+        ..['review'] = {
+          'participationId': id,
+          'version': 1,
+          'ratings': Map<String, dynamic>.from(ratings!),
+          'moderationState': 'valid',
+          if (data['comment'] != null) 'comment': data['comment'],
+        };
       return JsonReply(200, publicDraft(draft));
+    }
+    if (uri.path.startsWith('/participations/') &&
+        uri.path.endsWith('/review')) {
+      final id = uri.path.split('/')[2];
+      final participation = participations[id];
+      final review = participation?['review'] as Map<String, dynamic>?;
+      if (participation == null ||
+          participation['owner'] != email ||
+          review == null) {
+        return failure('REVIEW_NOT_FOUND', 404);
+      }
+      if (method == 'GET') {
+        return JsonReply(200, Map<String, dynamic>.from(review));
+      }
+      if (method == 'PUT') {
+        if (data['expectedVersion'] != review['version'] ||
+            (data['ratings'] as Map?)?.length != 8) {
+          return failure('VERSION_CONFLICT', 409);
+        }
+        review
+          ..['version'] = (review['version'] as int) + 1
+          ..['ratings'] = Map<String, dynamic>.from(data['ratings'] as Map);
+        if (data['comment'] == null) {
+          review.remove('comment');
+        } else {
+          review['comment'] = data['comment'];
+        }
+        return JsonReply(200, Map<String, dynamic>.from(review));
+      }
+    }
+    if (uri.path.startsWith('/participations/') && method == 'DELETE') {
+      final id = uri.path.split('/')[2];
+      final participation = participations[id];
+      if (participation == null || participation['owner'] != email) {
+        return failure('PARTICIPATION_NOT_FOUND', 404);
+      }
+      final expected = int.tryParse(
+        uri.queryParameters['expectedVersion'] ?? '',
+      );
+      if (expected != participation['version']) {
+        return failure('VERSION_CONFLICT', 409);
+      }
+      participation['state'] = 'deleted';
+      return const JsonReply(202, {
+        'operationId': 'demo-erasure',
+        'state': 'pending',
+        'publiclyHidden': true,
+      });
     }
     if (uri.path.startsWith('/participations/')) {
       final id = uri.path.split('/').last;

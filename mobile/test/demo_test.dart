@@ -10,6 +10,7 @@ IdentityGateway demoGateway(DemoTransport demo) => IdentityGateway(
   api: Uri.parse('https://api.demo.invalid'),
   clientId: 'synthetic-client',
   transport: demo.call,
+  byteTransport: demo.putBytes,
 );
 
 void main() {
@@ -54,7 +55,7 @@ void main() {
       await tester.ensureVisible(find.text('Explorar corridas'));
       await tester.tap(find.text('Explorar corridas'));
       await tester.pumpAndSettle();
-      expect(find.text('Descobrir corridas'), findsOneWidget);
+      expect(find.text('Encontre sua próxima conquista'), findsOneWidget);
       await tester.scrollUntilVisible(
         find.text('Carregar mais').hitTestable(),
         400,
@@ -66,6 +67,18 @@ void main() {
             .first,
       );
       expect(find.text('Carregar mais'), findsOneWidget);
+      await tester.tap(find.text('Início'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Sua próxima história começa na linha de largada.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Medalhas'));
+      await tester.pumpAndSettle();
+      expect(find.text('Minhas medalhas'), findsOneWidget);
+      await tester.tap(find.text('Perfil'));
+      await tester.pumpAndSettle();
+      expect(find.text('Corredor Demo'), findsOneWidget);
     },
   );
 
@@ -86,6 +99,78 @@ void main() {
       expect(gateway.signedIn, false);
       await gateway.signIn('new@runpass.test', 'RunpassChanged123!');
       expect(gateway.signedIn, true);
+    },
+  );
+
+  test(
+    'demo completes, edits the review and deletes a participation',
+    () async {
+      final demo = DemoTransport();
+      final gateway = demoGateway(demo);
+      await gateway.signIn('demo@runpass.test', 'RunpassDemo123!');
+      await gateway.request(
+        '/me',
+        method: 'PUT',
+        body: {'displayName': 'Corredor Demo', 'username': 'corredor_demo'},
+      );
+      await gateway.request(
+        '/beta/admissions',
+        method: 'POST',
+        body: {'birthDate': '1990-01-01', 'declaresAdult': true},
+      );
+
+      final catalog = await gateway.request('/editions');
+      expect(catalog['items'], hasLength(20));
+      final edition = (catalog['items'] as List).first as Map<String, dynamic>;
+      var participation = await gateway.request(
+        '/participations',
+        method: 'POST',
+        body: {'editionId': edition['id'], 'distanceId': '5k'},
+      );
+      final upload = await gateway.uploadImage([
+        0xff,
+        0xd8,
+        0xff,
+        0xd9,
+      ], 'image/jpeg');
+      participation = await gateway.request(
+        '/participations/${participation['id']}/complete',
+        method: 'POST',
+        body: {
+          'expectedVersion': participation['version'],
+          'declaredCompleted': true,
+          'medalImageReference': upload['imageReference'],
+          'ratings': {
+            'organization': 5,
+            'course': 5,
+            'hydration': 5,
+            'kit': 5,
+            'medal': 5,
+            'security': 5,
+            'accessibility': 5,
+            'overall': 5,
+          },
+          'comment': 'Minha primeira avaliação',
+        },
+      );
+      final reviewPath = '/participations/${participation['id']}/review';
+      var review = await gateway.request(reviewPath);
+      review = await gateway.request(
+        reviewPath,
+        method: 'PUT',
+        body: {
+          'expectedVersion': review['version'],
+          'ratings': Map<String, dynamic>.from(review['ratings'] as Map),
+        },
+      );
+      expect(review.containsKey('comment'), false);
+
+      final deletion = await gateway.request(
+        '/participations/${participation['id']}',
+        method: 'DELETE',
+        query: {'expectedVersion': '${participation['version']}'},
+      );
+      expect(deletion['publiclyHidden'], true);
     },
   );
 }

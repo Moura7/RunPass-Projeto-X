@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'identity_gateway.dart';
+import 'runpass_theme.dart';
 
 typedef PhotoSelector = Future<List<int>?> Function();
 
@@ -25,7 +26,11 @@ String catalogError(IdentityIssue issue) => switch (issue.code) {
   'DISTANCE_NOT_IN_EDITION' => 'A distância não pertence mais a esta edição.',
   'PARTICIPATION_EXISTS' => 'Você já possui um registro para esta edição.',
   'VERSION_CONFLICT' =>
-    'O rascunho mudou em outro lugar. Reabra-o antes de editar.',
+    'O registro mudou em outro lugar. Reabra-o antes de editar.',
+  'REVIEW_NOT_FOUND' => 'A avaliação atual não está disponível.',
+  'PARTICIPATION_NOT_FOUND' => 'Esta participação não está mais disponível.',
+  'DELETION_OPERATION_NOT_FOUND' =>
+    'A operação de exclusão não foi encontrada.',
   'IMAGE_SIZE_INVALID' => 'A foto deve ter no máximo 10 MB.',
   'IMAGE_FORMAT_INVALID' =>
     'Escolha uma foto JPEG ou PNG. Não foi possível converter esta imagem.',
@@ -39,6 +44,25 @@ String catalogError(IdentityIssue issue) => switch (issue.code) {
     'Esta participação já foi concluída ou alterada.',
   _ => 'Não foi possível carregar as corridas. Tente novamente.',
 };
+
+Widget runPassNavigation(
+  BuildContext context,
+  IdentityGateway gateway,
+  int selectedIndex,
+) => RunPassBottomNav(
+  selectedIndex: selectedIndex,
+  onDestinationSelected: (index) {
+    if (index == selectedIndex) return;
+    final screen = switch (index) {
+      0 => RunPassHomeScreen(gateway: gateway),
+      1 => CatalogScreen(gateway: gateway),
+      2 => MedalCollectionScreen(gateway: gateway),
+      _ => RunnerProfileScreen(gateway: gateway),
+    };
+    Navigator.of(context)
+        .pushReplacement(MaterialPageRoute<void>(builder: (_) => screen));
+  },
+);
 
 class CatalogScreen extends StatefulWidget {
   final IdentityGateway gateway;
@@ -152,54 +176,80 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Descobrir corridas')),
+    appBar: AppBar(
+      title: const RunPassWordmark(compact: true),
+      actions: const [
+        Icon(Icons.search_rounded),
+        SizedBox(width: 16),
+        Badge(child: Icon(Icons.notifications_none_rounded)),
+        SizedBox(width: 18),
+      ],
+    ),
+    bottomNavigationBar: runPassNavigation(context, widget.gateway, 1),
     body: SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Form(
-            key: form,
-            child: Column(
-              children: [
-                filter(
-                  'namePrefix',
-                  'Início do nome da corrida',
-                  maxLength: 160,
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: form,
+                child: Column(
+                  children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Encontre sua próxima conquista',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    filter(
+                      'namePrefix',
+                      'Início do nome da corrida',
+                      maxLength: 160,
+                    ),
+                    filter('city', 'Cidade', maxLength: 100),
+                    filter(
+                      'state',
+                      'Estado (UF)',
+                      maxLength: 2,
+                      validate: (value) =>
+                          RegExp(r'^[A-Za-z]{2}$').hasMatch(value)
+                          ? null
+                          : 'Informe a UF.',
+                    ),
+                    filter(
+                      'distanceKm',
+                      'Distância em km',
+                      validate: (value) {
+                        final km = double.tryParse(value);
+                        return km != null && km.isFinite && km > 0
+                            ? null
+                            : 'Informe uma distância positiva, usando ponto para decimais.';
+                      },
+                    ),
+                    filter(
+                      'dateFrom',
+                      'Data inicial (AAAA-MM-DD)',
+                      validate: dateValidator,
+                    ),
+                    filter(
+                      'dateTo',
+                      'Data final (AAAA-MM-DD)',
+                      validate: dateValidator,
+                    ),
+                    FilledButton(
+                      onPressed: loading ? null : () => load(),
+                      child: const Text('Buscar'),
+                    ),
+                  ],
                 ),
-                filter('city', 'Cidade', maxLength: 100),
-                filter(
-                  'state',
-                  'Estado (UF)',
-                  maxLength: 2,
-                  validate: (value) => RegExp(r'^[A-Za-z]{2}$').hasMatch(value)
-                      ? null
-                      : 'Informe a UF.',
-                ),
-                filter(
-                  'distanceKm',
-                  'Distância em km',
-                  validate: (value) {
-                    final km = double.tryParse(value);
-                    return km != null && km.isFinite && km > 0
-                        ? null
-                        : 'Informe uma distância positiva, usando ponto para decimais.';
-                  },
-                ),
-                filter(
-                  'dateFrom',
-                  'Data inicial (AAAA-MM-DD)',
-                  validate: dateValidator,
-                ),
-                filter(
-                  'dateTo',
-                  'Data final (AAAA-MM-DD)',
-                  validate: dateValidator,
-                ),
-                FilledButton(
-                  onPressed: loading ? null : () => load(),
-                  child: const Text('Buscar'),
-                ),
-              ],
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -220,6 +270,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
           for (final edition in items)
             Card(
               child: ListTile(
+                contentPadding: const EdgeInsets.all(16),
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: runPassOrange.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.directions_run, color: runPassOrange),
+                ),
                 title: Text(edition['name'] as String),
                 subtitle: Text(
                   '${displayDate(edition['date'] as String)} · ${edition['city']}/${edition['state']}\n'
@@ -296,7 +356,8 @@ class _EditionScreenState extends State<EditionScreen> {
   Widget build(BuildContext context) {
     final body = edition;
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalhes da edição')),
+      appBar: AppBar(title: const Text('Detalhes da corrida')),
+      bottomNavigationBar: runPassNavigation(context, widget.gateway, 1),
       body: SafeArea(
         child: loading
             ? const Center(child: CircularProgressIndicator())
@@ -318,9 +379,29 @@ class _EditionScreenState extends State<EditionScreen> {
             : ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
-                  Text(
-                    body['name'] as String,
-                    style: Theme.of(context).textTheme.headlineSmall,
+                  Card(
+                    color: runPassNavy,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.emoji_events,
+                            color: Color(0xffffc144),
+                          ),
+                          const SizedBox(height: 18),
+                          Text(
+                            body['name'] as String,
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -429,6 +510,7 @@ class _ParticipationDraftScreenState extends State<ParticipationDraftScreen> {
   bool saving = false, uploading = false;
   String? imageReference, pendingUploadId;
   bool declaredCompleted = false, publishToFeed = false;
+  bool deleted = false;
   final ratings = {
     'organization': 5,
     'course': 5,
@@ -626,33 +708,162 @@ class _ParticipationDraftScreenState extends State<ParticipationDraftScreen> {
     }
   }
 
+  Future<void> saveVisibility() async {
+    setState(() {
+      saving = true;
+      message = null;
+    });
+    try {
+      draft = await widget.gateway.request(
+        '/participations/${Uri.encodeComponent(draft['id'] as String)}',
+        method: 'PATCH',
+        body: {
+          'expectedVersion': draft['version'],
+          'showTime': draft['showTime'] != false,
+          'showPlacement': draft['showPlacement'] != false,
+        },
+      );
+      if (mounted) message = 'Preferências da participação atualizadas.';
+    } on IdentityIssue catch (issue) {
+      if (mounted) message = catalogError(issue);
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> deleteParticipation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir participação?'),
+        content: const Text(
+          'A participação será ocultada imediatamente e o RunScore será recomposto.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir participação'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      saving = true;
+      message = null;
+    });
+    try {
+      await widget.gateway.request(
+        '/participations/${Uri.encodeComponent(draft['id'] as String)}',
+        method: 'DELETE',
+        query: {'expectedVersion': '${draft['version']}'},
+      );
+      if (mounted) deleted = true;
+    } on IdentityIssue catch (issue) {
+      if (mounted) message = catalogError(issue);
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (draft['state'] == 'completed') {
+    if (deleted) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Participação concluída')),
+        appBar: AppBar(title: const Text('Participação excluída')),
+        bottomNavigationBar: runPassNavigation(context, widget.gateway, 3),
         body: const Padding(
           padding: EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.emoji_events_outlined, size: 48),
-              SizedBox(height: 16),
-              Text('Participação concluída · medalha e avaliação registradas.'),
-              SizedBox(height: 8),
-              Text(
-                'A conquista permanece privada enquanto a publicação não estiver disponível.',
-              ),
-            ],
+          child: Text(
+            'A participação foi ocultada. A limpeza foi agendada e pode continuar em segundo plano.',
           ),
         ),
       );
     }
+    if (draft['state'] == 'completed') {
+      return Scaffold(
+        appBar: AppBar(title: const RunPassWordmark(compact: true)),
+        bottomNavigationBar: runPassNavigation(context, widget.gateway, 2),
+        body: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xffffe4dc),
+              ),
+              child: const Icon(
+                Icons.emoji_events_rounded,
+                size: 40,
+                color: runPassOrange,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Participação concluída · medalha e avaliação registradas.',
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'A conquista permanece privada enquanto a publicação não estiver disponível.',
+            ),
+            SwitchListTile(
+              value: draft['showTime'] != false,
+              onChanged: saving
+                  ? null
+                  : (value) => setState(() => draft['showTime'] = value),
+              title: const Text('Exibir meu tempo'),
+            ),
+            SwitchListTile(
+              value: draft['showPlacement'] != false,
+              onChanged: saving
+                  ? null
+                  : (value) => setState(() => draft['showPlacement'] = value),
+              title: const Text('Exibir minha colocação'),
+            ),
+            FilledButton(
+              onPressed: saving ? null : saveVisibility,
+              child: const Text('Salvar visibilidade'),
+            ),
+            OutlinedButton(
+              onPressed: saving
+                  ? null
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ReviewEditScreen(
+                          gateway: widget.gateway,
+                          participationId: draft['id'] as String,
+                        ),
+                      ),
+                    ),
+              child: const Text('Editar avaliação'),
+            ),
+            TextButton(
+              onPressed: saving ? null : deleteParticipation,
+              child: const Text('Excluir participação'),
+            ),
+            if (message != null)
+              Text(message!, key: const Key('completed-message')),
+          ],
+        ),
+      );
+    }
     return Scaffold(
-      appBar: AppBar(title: const Text('Rascunho da participação')),
+      appBar: AppBar(title: const RunPassWordmark(compact: true)),
+      bottomNavigationBar: runPassNavigation(context, widget.gateway, 1),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          const Text(
+            'Rascunho da participação',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
+          ),
+          const SizedBox(height: 8),
           const Text('Privado · não gera medalha, avaliação ou publicação.'),
           TextField(
             controller: time,
@@ -740,4 +951,354 @@ class _ParticipationDraftScreenState extends State<ParticipationDraftScreen> {
       ),
     );
   }
+}
+
+class ReviewEditScreen extends StatefulWidget {
+  final IdentityGateway gateway;
+  final String participationId;
+  const ReviewEditScreen({
+    super.key,
+    required this.gateway,
+    required this.participationId,
+  });
+
+  @override
+  State<ReviewEditScreen> createState() => _ReviewEditScreenState();
+}
+
+class _ReviewEditScreenState extends State<ReviewEditScreen> {
+  Map<String, dynamic>? review;
+  final comment = TextEditingController();
+  String? message;
+  bool loading = true, saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  void dispose() {
+    comment.dispose();
+    super.dispose();
+  }
+
+  Future<void> load() async {
+    try {
+      final result = await widget.gateway.request(
+        '/participations/${Uri.encodeComponent(widget.participationId)}/review',
+      );
+      if (!mounted) return;
+      review = result;
+      comment.text = result['comment'] as String? ?? '';
+    } on IdentityIssue catch (issue) {
+      if (mounted) message = catalogError(issue);
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> save() async {
+    final current = review;
+    if (current == null) return;
+    setState(() {
+      saving = true;
+      message = null;
+    });
+    try {
+      review = await widget.gateway.request(
+        '/participations/${Uri.encodeComponent(widget.participationId)}/review',
+        method: 'PUT',
+        body: {
+          'expectedVersion': current['version'],
+          'ratings': current['ratings'],
+          if (comment.text.isNotEmpty) 'comment': comment.text,
+        },
+      );
+      if (mounted) message = 'Avaliação atualizada.';
+    } on IdentityIssue catch (issue) {
+      if (mounted) message = catalogError(issue);
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Editar avaliação')),
+    bottomNavigationBar: runPassNavigation(context, widget.gateway, 1),
+    body: loading
+        ? const Center(child: CircularProgressIndicator())
+        : review == null
+        ? Center(child: Text(message ?? 'Avaliação indisponível.'))
+        : ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              for (final entry
+                  in _ParticipationDraftScreenState.ratingLabels.entries)
+                DropdownButtonFormField<int>(
+                  initialValue: (review!['ratings'] as Map)[entry.key] as int,
+                  decoration: InputDecoration(labelText: entry.value),
+                  items: [1, 2, 3, 4, 5]
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text('$value'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: saving
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            (review!['ratings'] as Map)[entry.key] = value;
+                          }
+                        },
+                ),
+              TextField(
+                controller: comment,
+                maxLength: 2000,
+                decoration: const InputDecoration(
+                  labelText: 'Comentário (deixe vazio para remover)',
+                ),
+              ),
+              FilledButton(
+                onPressed: saving ? null : save,
+                child: Text(saving ? 'Salvando...' : 'Salvar avaliação'),
+              ),
+              if (message != null)
+                Text(message!, key: const Key('review-message')),
+            ],
+          ),
+  );
+}
+
+class RunPassHomeScreen extends StatelessWidget {
+  final IdentityGateway gateway;
+  const RunPassHomeScreen({super.key, required this.gateway});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const RunPassWordmark(compact: true)),
+    bottomNavigationBar: runPassNavigation(context, gateway, 0),
+    body: ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: runPassNavy,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.directions_run_rounded,
+                color: runPassOrange,
+                size: 42,
+              ),
+              SizedBox(height: 18),
+              Text(
+                'Sua próxima história começa na linha de largada.',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 24,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(context).pushReplacement(
+            MaterialPageRoute<void>(
+              builder: (_) => CatalogScreen(gateway: gateway),
+            ),
+          ),
+          icon: const Icon(Icons.search_rounded),
+          label: const Text('Encontrar corridas'),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).pushReplacement(
+            MaterialPageRoute<void>(
+              builder: (_) => MedalCollectionScreen(gateway: gateway),
+            ),
+          ),
+          icon: const Icon(Icons.emoji_events_outlined),
+          label: const Text('Ver minhas medalhas'),
+        ),
+      ],
+    ),
+  );
+}
+
+class MedalCollectionScreen extends StatefulWidget {
+  final IdentityGateway gateway;
+  const MedalCollectionScreen({super.key, required this.gateway});
+
+  @override
+  State<MedalCollectionScreen> createState() => _MedalCollectionScreenState();
+}
+
+class _MedalCollectionScreenState extends State<MedalCollectionScreen> {
+  List<Map<String, dynamic>> medals = [];
+  String? message;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      final result = await widget.gateway.request('/me/participations');
+      medals = (result['items'] as List? ?? const [])
+          .cast<Map<String, dynamic>>()
+          .where((item) => item['state'] == 'completed')
+          .toList();
+    } on IdentityIssue catch (issue) {
+      message = catalogError(issue);
+    } on Exception {
+      message = 'Não foi possível carregar suas medalhas.';
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Minhas medalhas')),
+    bottomNavigationBar: runPassNavigation(context, widget.gateway, 2),
+    body: loading
+        ? const Center(child: CircularProgressIndicator())
+        : message != null
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(message!),
+            ),
+          )
+        : medals.isEmpty
+        ? const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Você ainda não concluiu uma corrida. Sua primeira medalha aparecerá aqui.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        : ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: medals.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final medal = medals[index];
+              return Card(
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xffffe4dc),
+                    child: Icon(Icons.emoji_events, color: runPassOrange),
+                  ),
+                  title: const Text('Medalha conquistada'),
+                  subtitle: Text('Corrida ${medal['editionId']}'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ParticipationDraftScreen(
+                        gateway: widget.gateway,
+                        initial: medal,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+  );
+}
+
+class RunnerProfileScreen extends StatefulWidget {
+  final IdentityGateway gateway;
+  const RunnerProfileScreen({super.key, required this.gateway});
+
+  @override
+  State<RunnerProfileScreen> createState() => _RunnerProfileScreenState();
+}
+
+class _RunnerProfileScreenState extends State<RunnerProfileScreen> {
+  Map<String, dynamic>? profile;
+  String? message;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      profile = await widget.gateway.request('/me');
+    } on IdentityIssue catch (issue) {
+      message = catalogError(issue);
+    } on Exception {
+      message = 'Não foi possível carregar seu perfil.';
+    } finally {
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Meu perfil')),
+    bottomNavigationBar: runPassNavigation(context, widget.gateway, 3),
+    body: profile == null && message == null
+        ? const Center(child: CircularProgressIndicator())
+        : message != null
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(message!),
+            ),
+          )
+        : ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              const CircleAvatar(
+                radius: 42,
+                backgroundColor: Color(0xffffe4dc),
+                child: Icon(Icons.person, size: 48, color: runPassOrange),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                profile!['displayName'] as String? ?? 'Corredor',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '@${profile!['username'] ?? ''}',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 24),
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.lock_outline),
+                  title: Text('Perfil protegido'),
+                  subtitle: Text(
+                    'Seus dados locais de demonstração não são enviados à AWS.',
+                  ),
+                ),
+              ),
+            ],
+          ),
+  );
 }

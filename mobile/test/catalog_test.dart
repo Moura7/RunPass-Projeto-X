@@ -51,7 +51,7 @@ Future<void> reveal(
       )
       .first;
   await tester.scrollUntilVisible(
-    target.hitTestable(),
+    target,
     backwards ? -160 : 160,
     scrollable: scroll,
   );
@@ -94,6 +94,10 @@ void main() {
         MaterialApp(home: CatalogScreen(gateway: gateway)),
       );
       await tester.pumpAndSettle();
+      await reveal(
+        tester,
+        find.text('Nenhuma corrida nesta página. Continue a busca.'),
+      );
       expect(
         find.text('Nenhuma corrida nesta página. Continue a busca.'),
         findsOneWidget,
@@ -144,7 +148,7 @@ void main() {
       await reveal(tester, find.text('Corrida A'));
       await tester.tap(find.text('Corrida A'));
       await tester.pumpAndSettle();
-      expect(find.text('Detalhes da edição'), findsOneWidget);
+      expect(find.text('Detalhes da corrida'), findsOneWidget);
       await tester.tap(find.text('10 km'));
       await tester.pumpAndSettle();
       expect(find.text('Distância selecionada.'), findsOneWidget);
@@ -329,10 +333,103 @@ void main() {
     );
     await tester.pumpWidget(MaterialApp(home: CatalogScreen(gateway: gateway)));
     await tester.pumpAndSettle();
+    await reveal(
+      tester,
+      find.text('É necessário participar do beta para consultar as corridas.'),
+    );
     expect(
       find.text('É necessário participar do beta para consultar as corridas.'),
       findsOneWidget,
     );
-    expect(find.byType(Card), findsNothing);
+    expect(find.byType(ListTile), findsNothing);
+  });
+
+  testWidgets('completed participation edits review and can be deleted', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    final gateway = await signed((uri, method, headers, body) async {
+      calls.add('$method ${uri.path}');
+      if (method == 'GET') {
+        return const JsonReply(200, {
+          'participationId': 'done-1',
+          'version': 1,
+          'ratings': {
+            'organization': 5,
+            'course': 5,
+            'kit': 5,
+            'medal': 5,
+            'hydration': 5,
+            'facilities': 5,
+            'safety': 5,
+            'valueForMoney': 5,
+          },
+          'moderationState': 'valid',
+          'comment': 'Anterior',
+        });
+      }
+      if (method == 'PUT') {
+        expect(body?['expectedVersion'], 1);
+        expect(body?['comment'], isNull);
+        return JsonReply(200, {
+          ...body!,
+          'participationId': 'done-1',
+          'version': 2,
+          'moderationState': 'valid',
+        });
+      }
+      if (method == 'DELETE') {
+        expect(uri.queryParameters['expectedVersion'], '2');
+        return const JsonReply(202, {
+          'operationId': 'erase-1',
+          'state': 'pending',
+          'publiclyHidden': true,
+        });
+      }
+      return const JsonReply(200, {
+        'id': 'done-1',
+        'state': 'completed',
+        'version': 3,
+        'showTime': false,
+        'showPlacement': true,
+      });
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ParticipationDraftScreen(
+          gateway: gateway,
+          initial: const {
+            'id': 'done-1',
+            'state': 'completed',
+            'version': 2,
+            'showTime': true,
+            'showPlacement': true,
+          },
+        ),
+      ),
+    );
+    await tester.tap(find.text('Editar avaliação'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Salvar avaliação'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.enterText(find.byType(TextField), '');
+    await tester.tap(find.text('Salvar avaliação'));
+    await tester.pumpAndSettle();
+    expect(find.text('Avaliação atualizada.'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Excluir participação'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Excluir participação').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('A participação foi ocultada'), findsOneWidget);
+    expect(calls, [
+      'GET /participations/done-1/review',
+      'PUT /participations/done-1/review',
+      'DELETE /participations/done-1',
+    ]);
   });
 }

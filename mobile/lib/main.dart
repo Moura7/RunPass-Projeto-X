@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'identity_gateway.dart';
 import 'catalog_screen.dart';
+import 'runpass_theme.dart';
 
 void main() {
   const api = String.fromEnvironment('RUNPASS_API_URL');
@@ -51,7 +52,7 @@ class MainApp extends StatelessWidget {
               Expanded(child: child!),
             ],
           ),
-    theme: ThemeData(colorSchemeSeed: Colors.deepOrange),
+    theme: runPassTheme(),
     home: IdentityScreen(gateway: gateway),
   );
 }
@@ -226,6 +227,35 @@ class _IdentityScreenState extends State<IdentityScreen> {
     }
   }, validate: true);
 
+  Future<void> deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir sua conta?'),
+        content: const Text(
+          'O acesso será bloqueado imediatamente e a limpeza dos seus dados será agendada.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir minha conta'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await perform(() async {
+      await widget.gateway!.request('/me', method: 'DELETE');
+      widget.gateway!.clearSession();
+      step = Step.signIn;
+      message = 'Exclusão aceita. O acesso à conta foi encerrado.';
+    });
+  }
+
   Widget field(
     TextEditingController controller,
     String label, {
@@ -276,7 +306,7 @@ class _IdentityScreenState extends State<IdentityScreen> {
       Step.closed => 'As admissões do beta foram encerradas',
     };
     return Scaffold(
-      appBar: AppBar(title: const Text('RunPass')),
+      appBar: AppBar(title: const RunPassWordmark(compact: true)),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -292,9 +322,43 @@ class _IdentityScreenState extends State<IdentityScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (step == Step.signIn || step == Step.signUp)
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: runPassNavy,
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.emoji_events_rounded,
+                                    color: Color(0xffffc144),
+                                    size: 32,
+                                  ),
+                                  SizedBox(height: 18),
+                                  Text(
+                                    'Mais que corridas.\nSão histórias para sempre.',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 23,
+                                      height: 1.08,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (step == Step.signIn || step == Step.signUp)
+                            const SizedBox(height: 24),
                           Text(
                             title,
-                            style: Theme.of(context).textTheme.headlineSmall,
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: runPassNavy,
+                                ),
                           ),
                           const SizedBox(height: 24),
                           if (initial) field(email, 'E-mail'),
@@ -438,6 +502,11 @@ class _IdentityScreenState extends State<IdentityScreen> {
                                       }
                                     }),
                               child: const Text('Sair'),
+                            ),
+                          if (gateway.signedIn && step == Step.ready)
+                            TextButton(
+                              onPressed: busy ? null : deleteAccount,
+                              child: const Text('Excluir minha conta'),
                             ),
                           if (initial && step != Step.signIn)
                             TextButton(
