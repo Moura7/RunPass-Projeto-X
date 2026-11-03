@@ -176,3 +176,7 @@ Resultado: `make check` aprovado em Python 3.11 e 3.12, com 134 testes backend (
 ## Região AWS — 02/11/2026
 
 Uma migração para `us-east-2` foi feita e desfeita no mesmo dia: a conta de projeto `<ID da conta de projeto>` só opera em `us-east-2` e foi substituída pela conta padrão `<ID da conta DEV>`, em `sa-east-1` (SPEC, seção "Região AWS"). O que ficou: `JwksProvider` recebe a região configurada e só aceita o issuer Cognito dela, com teste de rejeição para outras regiões, e `AwsSettings` tem `region`, lida de `AWS_REGION` na Lambda. Provisionamento continua não autorizado.
+
+## Reverificação do mobile — 03/11/2026
+
+`make mobile-check` aprovado: análise estática sem problemas, formatação sem alterações (9 arquivos) e 18 testes Flutter aprovados (demo local, catálogo, rascunho, foto com oito avaliações, edição e exclusão de participação). É teste local com adaptadores; não substitui Android/iPhone reais nem integração com serviços AWS. Nenhum código foi alterado.
