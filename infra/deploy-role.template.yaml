@@ -1,0 +1,152 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RunPass GitHub Actions OIDC deploy role and CloudFormation execution role (candidate, not applied)
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+  GitHubOrg:
+    Type: String
+    AllowedPattern: '^[A-Za-z0-9-]+$'
+    Description: GitHub organization or user that owns the repository
+  GitHubRepo:
+    Type: String
+    AllowedPattern: '^[A-Za-z0-9._-]+$'
+  GitHubEnvironment:
+    Type: String
+    Default: dev
+    AllowedPattern: '^[A-Za-z0-9._-]+$'
+    Description: GitHub Environment name; configure required reviewers there so each deploy needs approval
+  ArtifactBucket:
+    Type: String
+    Description: Existing private versioned bucket that holds the Lambda zip
+  ExistingOidcProviderArn:
+    Type: String
+    Default: ''
+    Description: Leave empty to create the GitHub OIDC provider; an account can have only one
+
+Conditions:
+  CreateProvider: !Equals [!Ref ExistingOidcProviderArn, '']
+
+Resources:
+  GitHubProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub runpass-${Environment}-gha-deploy
+      Description: Assumed by GitHub Actions to run CloudFormation for RunPass
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If [CreateProvider, !Ref GitHubProvider, !Ref ExistingOidcProviderArn]
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:${GitHubEnvironment}
+      Policies:
+        - PolicyName: deploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: Stacks
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:GetTemplate
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/runpass-${Environment}-*/*
+              - Sid: ValidateOnly
+                Effect: Allow
+                Action: cloudformation:ValidateTemplate
+                Resource: '*'
+              - Sid: Artifacts
+                Effect: Allow
+                Action: [s3:GetObject, s3:GetObjectVersion, s3:PutObject]
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}/*
+              - Sid: PassExecutionRoleOnly
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt ExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub runpass-${Environment}-cfn-exec
+      Description: Used by CloudFormation to create RunPass resources in this Region only
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: resources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ServicesInRegion
+                Effect: Allow
+                Action:
+                  - apigateway:*
+                  - cloudwatch:*
+                  - cognito-idp:*
+                  - dynamodb:*
+                  - events:*
+                  - lambda:*
+                  - logs:*
+                  - sns:*
+                  - sqs:*
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion: !Ref AWS::Region
+              - Sid: Buckets
+                Effect: Allow
+                Action: s3:*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::runpass-${Environment}-*
+                  - !Sub arn:${AWS::Partition}:s3:::runpass-${Environment}-*/*
+                  - !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}/*
+              - Sid: ServiceRolesByPrefix
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:UpdateRole
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:PassRole
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/runpass-${Environment}-*
+
+Outputs:
+  DeployRoleArn:
+    Description: Value for the GitHub Actions role-to-assume (not a secret)
+    Value: !GetAtt DeployRole.Arn
+  ExecutionRoleArn:
+    Description: Pass to cloudformation create-change-set --role-arn
+    Value: !GetAtt ExecutionRole.Arn
