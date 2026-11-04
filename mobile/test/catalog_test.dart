@@ -121,12 +121,57 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls.last['city'], 'Santos');
       expect(calls.last.containsKey('cursor'), false);
+      await reveal(
+        tester,
+        find.text('Nenhuma corrida encontrada com esses filtros.'),
+      );
       expect(
         find.text('Nenhuma corrida encontrada com esses filtros.'),
         findsOneWidget,
       );
     },
   );
+
+  testWidgets('clear search empties filters and reloads without them', (
+    tester,
+  ) async {
+    final calls = <Map<String, String>>[];
+    final gateway = await signed((uri, method, headers, body) async {
+      calls.add(uri.queryParameters);
+      return const JsonReply(200, {'items': []});
+    });
+    await tester.pumpWidget(MaterialApp(home: CatalogScreen(gateway: gateway)));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Cidade'),
+      'Santos',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Estado (UF)'),
+      'S',
+    );
+    await reveal(tester, find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Informe a UF.'), findsOneWidget);
+    await reveal(tester, find.text('Limpar busca'));
+    await tester.tap(find.text('Limpar busca'));
+    await tester.pumpAndSettle();
+    expect(find.text('Informe a UF.'), findsNothing);
+    expect(calls.last.containsKey('city'), false);
+    expect(calls.last.containsKey('state'), false);
+    for (final label in ['Cidade', 'Estado (UF)']) {
+      await reveal(
+        tester,
+        find.widgetWithText(TextFormField, label),
+        backwards: true,
+      );
+      final field = tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, label),
+      );
+      expect(field.controller!.text, '');
+    }
+  });
 
   testWidgets(
     'list opens current detail and selects distance without creating a record',

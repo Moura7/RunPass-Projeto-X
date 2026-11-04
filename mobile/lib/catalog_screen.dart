@@ -144,6 +144,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
+  void clearSearch() {
+    if (loading) return;
+    for (final controller in fields.values) {
+      controller.clear();
+    }
+    form.currentState?.reset();
+    load();
+  }
+
   Widget filter(
     String key,
     String label, {
@@ -246,6 +255,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     FilledButton(
                       onPressed: loading ? null : () => load(),
                       child: const Text('Buscar'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: loading ? null : clearSearch,
+                      child: const Text('Limpar busca'),
                     ),
                   ],
                 ),
